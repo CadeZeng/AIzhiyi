@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none}
+html,body{width:100vw;height:100vh;overflow:hidden;cursor:crosshair}
+#mask{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,0.45);
+  pointer-events:none;
+}
+#tip{
+  position:fixed;top:24px;left:50%;transform:translateX(-50%);
+  background:rgba(19,24,32,0.95);
+  color:#E5E7EB;font-size:13px;
+  padding:8px 16px;border-radius:8px;
+  border:1px solid rgba(59,130,246,0.35);
+  pointer-events:none;
+  box-shadow:0 4px 12px rgba(0,0,0,0.3);
+}
+#tip .accent{color:#3B82F6;font-weight:600}
+#sel{
+  position:fixed;border:2px solid #3B82F6;
+  background:rgba(59,130,246,0.08);
+  pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(0,0,0,0.45);
+}
+#sel.hidden{display:none}
+#size{
+  position:fixed;background:rgba(19,24,32,0.95);color:#60A5FA;
+  font-size:11px;padding:2px 6px;border-radius:4px;
+  pointer-events:none;border:1px solid rgba(59,130,246,0.3);
+}
+#size.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="mask"></div>
+<div id="tip"><span class="accent">拖拽</span>选择翻译区域 · <span class="accent">Esc</span> 取消</div>
+<div id="sel" class="hidden"></div>
+<div id="size" class="hidden"></div>
+<script>
+const sel = document.getElementById('sel');
+const sizeEl = document.getElementById('size');
+let start = null;
+let rect = null;
+
+// 调试：确认 JS 执行
+document.title = 'overlay-ready';
+console.log('[overlay] JS 已加载，overlayAPI:', typeof window.overlayAPI);
+
+document.addEventListener('mousedown', (e) => {
+  console.log('[overlay] mousedown', e.clientX, e.clientY);
+  start = { x: e.clientX, y: e.clientY };
+  sel.classList.remove('hidden');
+  sizeEl.classList.remove('hidden');
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!start) return;
+  const x = Math.min(start.x, e.clientX);
+  const y = Math.min(start.y, e.clientY);
+  const w = Math.abs(e.clientX - start.x);
+  const h = Math.abs(e.clientY - start.y);
+  rect = { x, y, width: w, height: h };
+  sel.style.left = x + 'px';
+  sel.style.top = y + 'px';
+  sel.style.width = w + 'px';
+  sel.style.height = h + 'px';
+  sizeEl.style.left = (x + w + 4) + 'px';
+  sizeEl.style.top = (y + h + 4) + 'px';
+  sizeEl.textContent = w + ' × ' + h;
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (!start) return;
+  if (rect && rect.width > 4 && rect.height > 4) {
+    window.overlayAPI.submit(rect);
+  } else {
+    window.overlayAPI.cancel();
+  }
+  start = null;
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') window.overlayAPI.cancel();
+});
+
+// 右键取消
+document.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  window.overlayAPI.cancel();
+});
+</script>
+</body>
+</html>

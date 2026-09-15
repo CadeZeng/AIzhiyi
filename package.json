@@ -1,0 +1,93 @@
+{
+  "name": "ai-translator",
+  "productName": "AI智译",
+  "version": "1.0.0",
+  "description": "Vibe Coding 辅助翻译与提示词 - Windows 桌面应用",
+  "author": "AI智译",
+  "license": "MIT",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "gen:icon": "node generate-icon.js",
+    "build:win": "electron-builder --win --x64 --publish never",
+    "build:portable": "electron-builder --win portable --x64 --publish never",
+    "build:nsis": "electron-builder --win nsis --x64 --publish never",
+    "build:dir": "electron-builder --win --dir --x64 --publish never",
+    "dist:gh": "node scripts/publish.js",
+    "dist:gh:direct": "electron-builder --win --x64 --publish always",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.aizhiyi.translator",
+    "productName": "AI智译",
+    "copyright": "Copyright © 2026 AI智译",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "index.html",
+      "overlay.html",
+      "result.html",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/app-update.yml",
+        "to": "app-update.yml"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "CadeZeng",
+        "repo": "AIzhiyi",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "AI智译-Setup-${version}.${ext}",
+      "publisherName": "AI智译",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false,
+      "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AI智译",
+      "deleteAppDataOnUninstall": false,
+      "displayLanguageSelector": false,
+      "language": "2052"
+    },
+    "portable": {
+      "artifactName": "AI智译-${version}-Portable.${ext}"
+    }
+  },
+  "dependencies": {
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9"
+  }
+}

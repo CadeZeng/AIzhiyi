@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei UI","PingFang SC",sans-serif}
+body{
+  background:rgba(19,24,32,0.92);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(59,130,246,0.35);
+  border-radius:12px;
+  overflow:hidden;
+  color:#E5E7EB;
+  box-shadow:0 12px 32px rgba(0,0,0,0.5);
+}
+.card{padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-height:100%}
+.header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.tag{font-size:11px;color:#3B82F6;font-weight:600;display:flex;align-items:center;gap:6px}
+.tag::before{content:"";width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#22D3EE)}
+.close-btn{cursor:pointer;color:#6B7280;font-size:16px;line-height:1;padding:2px 4px;border-radius:4px}
+.close-btn:hover{color:#fff;background:rgba(255,255,255,0.1)}
+.body{flex:1;font-size:13px;line-height:1.6;overflow-y:auto;max-height:160px}
+.original{color:#9CA3AF;font-size:12px;margin-bottom:6px}
+.translation{color:#F3F4F6;font-weight:500}
+.divider{height:1px;background:rgba(255,255,255,0.06);margin:6px 0}
+.actions{display:flex;justify-content:flex-end;gap:8px}
+.btn{
+  font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;
+  background:rgba(59,130,246,0.12);color:#60A5FA;border:1px solid rgba(59,130,246,0.3);
+  transition:all 0.15s;
+}
+.btn:hover{background:rgba(59,130,246,0.22);color:#fff}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:140px;color:#9CA3AF;font-size:12px}
+.spinner{
+  width:22px;height:22px;border:2px solid rgba(59,130,246,0.2);
+  border-top-color:#3B82F6;border-radius:50%;
+  animation:spin 0.8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error{color:#FCA5A5}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div id="content"></div>
+</div>
+<script>
+const card = document.getElementById('card');
+
+window.resultAPI.onShow((data) => {
+  if (data.loading) {
+    card.innerHTML = `<div class="loading"><div class="spinner"></div><div>${data.msg || '处理中...'}</div></div>`;
+    return;
+  }
+  if (data.error) {
+    card.innerHTML = `<div class="loading error"><div>⚠</div><div>${data.msg || '处理失败'}</div></div>`;
+    return;
+  }
+  let html = '<div class="header"><div class="tag">AI智译</div><div class="close-btn" id="closeBtn">✕</div></div>';
+  html += '<div class="body">';
+  if (data.original) {
+    html += `<div class="original">${escapeHtml(data.original)}</div>`;
+    html += '<div class="divider"></div>';
+  }
+  html += `<div class="translation">${escapeHtml(data.translation)}</div>`;
+  html += '</div>';
+  if (data.translation) {
+    html += '<div class="actions"><div class="btn" id="copyBtn">复制译文</div></div>';
+  }
+  card.innerHTML = html;
+  document.getElementById('closeBtn')?.addEventListener('click', () => window.resultAPI.close());
+  document.getElementById('copyBtn')?.addEventListener('click', () => window.resultAPI.copyText(data.translation));
+});
+
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+</script>
+</body>
+</html>

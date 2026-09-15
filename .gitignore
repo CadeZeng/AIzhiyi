@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# 打包输出
+dist/
+dist_electron/
+
+# 临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统
+desktop.ini
+$RECYCLE.BIN/
+
+# 开发工具本地目录
+.trae/
