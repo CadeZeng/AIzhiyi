@@ -88,6 +88,28 @@ function scheduleHide() {
   hideTimer = setTimeout(() => hide('timeout'), ms);
 }
 
+function notifyHistory(data) {
+  if (!data || data.loading || (data.error && !data.translation)) return;
+  const input = String(data.original || '').trim();
+  const output = String(data.translation || '').trim();
+  if (!input && !output) return;
+  try {
+    const { BrowserWindow } = require('electron');
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w.isDestroyed()) continue;
+      const url = w.webContents.getURL() || '';
+      if (!url.includes('index.html')) continue;
+      w.webContents.send('history:add', {
+        type: 'translate',
+        source: data.source || 'pick',
+        input,
+        output,
+        meta: { pickSource: data.pickSource || '' }
+      });
+    }
+  } catch (_) {}
+}
+
 function showAt(x, y, data) {
   const w = ensure();
   lastPoint = { x, y };
@@ -107,6 +129,7 @@ function showAt(x, y, data) {
   w.showInactive();
   w.setIgnoreMouseEvents(!pinned, { forward: true });
   scheduleHide();
+  notifyHistory(data);
   log.info('[result-window] showInactive 不激活当前窗口 source=', data.source || 'unknown',
     'clipboard_untouched=true focus_stolen=false');
 }
@@ -156,5 +179,5 @@ function destroy() {
 
 module.exports = {
   ensure, showAt, showLoading, hide, destroy, setPinned, isPinned: () => pinned,
-  isVisible, containsPoint, getLastPoint: () => lastPoint
+  isVisible, containsPoint, getLastPoint: () => lastPoint, notifyHistory
 };

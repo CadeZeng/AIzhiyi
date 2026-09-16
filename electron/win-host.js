@@ -180,6 +180,11 @@ async function uiaRect(physicalX, physicalY, physicalW, physicalH, unit = 'line'
   return data || { text: '', source: 'uia-rect-miss' };
 }
 
+async function uiaRange(x1, y1, x2, y2, unit = 'auto') {
+  const data = await request('uia-range', { x1, y1, x2, y2, unit }, 2200);
+  return data || { text: '', source: 'uia-range-miss', rects: [] };
+}
+
 function onEvent(fn) {
   eventListeners.add(fn);
   return () => eventListeners.delete(fn);
@@ -243,7 +248,7 @@ function stop() {
 }
 
 module.exports = {
-  ensure, request, getKeys, keyWentDown, uiaText, uiaRect, ocrFile,
+  ensure, request, getKeys, keyWentDown, uiaText, uiaRect, uiaRange, ocrFile,
   startGuard, stopGuard, configGuard, onEvent,
   applyNoActivate, stop, isRunning: () => !!child
 };

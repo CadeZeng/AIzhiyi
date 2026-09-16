@@ -70,6 +70,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hoverOcrAccelerator: 'Ctrl+Shift+J',
   clipboardAccelerator: 'Alt+T',
 
+  onHistoryAdd: (callback) => {
+    const handler = (_e, item) => callback(item);
+    ipcRenderer.on('history:add', handler);
+    return () => ipcRenderer.removeListener('history:add', handler);
+  },
+
   // ====== LOGO 小球（翻译总开关） ======
   ball: {
     getState: () => ipcRenderer.invoke('ball:get-state'),

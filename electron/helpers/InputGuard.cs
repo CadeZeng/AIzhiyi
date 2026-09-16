@@ -407,19 +407,21 @@ public static class InputGuard
 
             if (_capturing)
             {
+                // 绝不能吞掉 MOUSEMOVE：WH_MOUSE_LL 拦截移动会导致光标/画面卡死
+                if (msg == WM_MOUSEMOVE)
+                {
+                    return CallNextHookEx(_mHook, nCode, wParam, lParam);
+                }
                 if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK)
                 {
                     EmitMouse("down", info.pt.x, info.pt.y, true);
-                    return (IntPtr)1;
+                    // 放行给置顶遮罩窗口画选框，底层被遮罩挡住收不到
+                    return CallNextHookEx(_mHook, nCode, wParam, lParam);
                 }
                 if (msg == WM_LBUTTONUP)
                 {
                     EmitMouse("up", info.pt.x, info.pt.y, false);
-                    return (IntPtr)1;
-                }
-                if (msg == WM_MOUSEMOVE)
-                {
-                    return (IntPtr)1;
+                    return CallNextHookEx(_mHook, nCode, wParam, lParam);
                 }
                 if (msg == WM_MOUSEWHEEL || msg == WM_MOUSEHWHEEL
                     || msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP
@@ -428,7 +430,6 @@ public static class InputGuard
                 {
                     return (IntPtr)1;
                 }
-                return (IntPtr)1;
             }
         }
         catch { }

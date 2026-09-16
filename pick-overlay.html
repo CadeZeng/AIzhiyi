@@ -3,16 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none}
+*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-app-region:no-drag}
 html,body{
   width:100%;height:100%;overflow:hidden;
-  background:transparent;
-  cursor:crosshair;
-}
-#mask{
-  position:fixed;inset:0;
-  background:rgba(8,12,20,0.14);
-  pointer-events:none;
+  background:rgba(8,12,20,0.07);
+  cursor:text;
 }
 #tip{
   position:fixed;top:24px;left:50%;transform:translateX(-50%);
@@ -26,61 +21,104 @@ html,body{
   white-space:nowrap;
 }
 #tip .accent{color:#60A5FA;font-weight:600}
-#sel{
-  position:fixed;
-  border:2px solid var(--pick-color, #3B82F6);
-  background:transparent;
-  pointer-events:none;
-  box-shadow:0 0 0 9999px rgba(8,12,20,0.28);
-  z-index:4;
+#hls{position:fixed;inset:0;pointer-events:none;z-index:4}
+.hl{
+  position:absolute;
+  background:rgba(59,130,246,0.28);
+  border-radius:2px;
+  box-sizing:border-box;
 }
-#sel.hidden{display:none}
-#size{
-  position:fixed;background:rgba(19,24,32,0.95);color:#60A5FA;
-  font-size:11px;padding:2px 6px;border-radius:4px;
-  pointer-events:none;border:1px solid rgba(59,130,246,0.3);z-index:5;
-}
-#size.hidden{display:none}
 </style>
 </head>
 <body>
-<div id="mask"></div>
-<div id="tip"><span class="accent">拖动</span>框选要翻译的区域 · 松开 <span class="accent">Alt</span> 翻译 · <span class="accent">Esc</span> 取消</div>
-<div id="sel" class="hidden"></div>
-<div id="size" class="hidden"></div>
+<div id="tip"><span class="accent">拖动</span>拉取要翻译的字句 · 松开 <span class="accent">Alt</span> 翻译 · <span class="accent">Esc</span> 取消</div>
+<div id="hls"></div>
 <script>
-const sel = document.getElementById('sel');
-const sizeEl = document.getElementById('size');
-const mask = document.getElementById('mask');
+const hls = document.getElementById('hls');
 const tip = document.getElementById('tip');
+let color = '#3B82F6';
+let dragging = false;
+let start = null;
 
-function render(state){
-  const color = state.color || '#3B82F6';
-  document.documentElement.style.setProperty('--pick-color', color);
-  if (state.tip) tip.innerHTML = state.tip;
-  const rect = state.rect;
-  if (rect && rect.width >= 2 && rect.height >= 2) {
-    mask.style.display = 'none';
-    sel.classList.remove('hidden');
-    sizeEl.classList.remove('hidden');
-    sel.style.left = rect.x + 'px';
-    sel.style.top = rect.y + 'px';
-    sel.style.width = rect.width + 'px';
-    sel.style.height = rect.height + 'px';
-    sel.style.borderColor = color;
-    sizeEl.style.left = (rect.x + rect.width + 4) + 'px';
-    sizeEl.style.top = (rect.y + rect.height + 4) + 'px';
-    sizeEl.textContent = Math.round(rect.width) + ' × ' + Math.round(rect.height);
-  } else {
-    mask.style.display = 'block';
-    sel.classList.add('hidden');
-    sizeEl.classList.add('hidden');
+function selectionLike(a, b){
+  const H = 22;
+  let x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y;
+  if (y2 < y1 - 2) { const t = x1; x1 = x2; x2 = t; const u = y1; y1 = y2; y2 = u; }
+  if (Math.abs(y2 - y1) < H * 0.65) {
+    const x = Math.min(x1, x2);
+    return [{ x, y: y1 - H / 2, width: Math.max(8, Math.abs(x2 - x1)), height: H }];
   }
+  const W = document.documentElement.clientWidth;
+  const left = 24, right = W - 24;
+  const rects = [];
+  rects.push({ x: x1, y: y1 - H / 2, width: Math.max(8, right - x1), height: H });
+  let y = y1 + H;
+  while (y + H / 2 < y2 - H * 0.4) {
+    rects.push({ x: left, y: y - H / 2, width: Math.max(8, right - left), height: H });
+    y += H;
+  }
+  rects.push({ x: left, y: y2 - H / 2, width: Math.max(8, x2 - left), height: H });
+  return rects;
+}
+
+function paint(rects){
+  hls.innerHTML = '';
+  (rects || []).forEach((r) => {
+    if (!r || r.width < 2 || r.height < 2) return;
+    const d = document.createElement('div');
+    d.className = 'hl';
+    d.style.left = r.x + 'px';
+    d.style.top = r.y + 'px';
+    d.style.width = r.width + 'px';
+    d.style.height = r.height + 'px';
+    d.style.background = hexAlpha(color, 0.28);
+    hls.appendChild(d);
+  });
+}
+
+function hexAlpha(hex, a){
+  const h = String(hex || '#3B82F6').replace('#','');
+  const n = parseInt(h.length === 3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
 }
 
 if (window.pickAPI && window.pickAPI.onState) {
-  window.pickAPI.onState(render);
+  window.pickAPI.onState((state) => {
+    color = state.color || '#3B82F6';
+    if (state.tip) tip.innerHTML = state.tip;
+    if (!dragging) paint(state.highlights || []);
+  });
 }
+
+function emit(type, end){
+  if (!window.pickAPI) return;
+  const highlights = (start && end) ? selectionLike(start, end) : [];
+  paint(highlights);
+  window.pickAPI.drag({ type, start, end, highlights });
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  dragging = true;
+  start = { x: e.clientX, y: e.clientY };
+  emit('down', start);
+});
+
+document.addEventListener('pointermove', (e) => {
+  if (!dragging || !start) return;
+  emit('move', { x: e.clientX, y: e.clientY });
+});
+
+document.addEventListener('pointerup', (e) => {
+  if (!dragging) return;
+  dragging = false;
+  emit('up', { x: e.clientX, y: e.clientY });
+  start = null;
+});
+
+document.addEventListener('contextmenu', (e) => e.preventDefault());
 </script>
 </body>
 </html>

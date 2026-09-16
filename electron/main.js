@@ -39,11 +39,12 @@ function resolveIconImage(fileName) {
   return null;
 }
 
-// 单实例锁
-const gotTheLock = app.requestSingleInstanceLock();
+// 单实例锁（自测进程不抢锁，避免已打开的应用把测试直接杀掉）
+const isSelfTestPick = process.argv.includes('--self-test-pick');
+const gotTheLock = isSelfTestPick ? true : app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
-} else {
+} else if (!isSelfTestPick) {
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -237,8 +238,13 @@ function createWindow() {
 }
 
 // ====== 应用生命周期 ======
-app.whenReady().then(() => {
-  log.info('AI智译 应用启动，版本：', app.getVersion());
+app.whenReady().then(async () => {
+  log.info('AI智译 应用启动，版本：', app.getVersion(), 'argv=', process.argv.join(' '));
+  if (isSelfTestPick) {
+    const test = require('./self-test-pick');
+    await test.run();
+    return;
+  }
   createWindow();
 
   app.on('activate', () => {

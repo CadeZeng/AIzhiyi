@@ -1,6 +1,6 @@
 # AI智译 Windows helper (STA)
 # Commands (JSON line in, JSON line out):
-#   keys | uia | uia-rect | ocr | exstyle | guard-start | guard-stop | ping | quit
+#   keys | uia | uia-rect | uia-range | ocr | exstyle | guard-start | guard-stop | ping | quit
 # Observation only: never Select/SetFocus/Invoke/SendKeys/clipboard.
 
 $ErrorActionPreference = 'Continue'
@@ -168,6 +168,105 @@ function Get-UiaText($x, $y, $unit) {
     return @{ text = $name.Trim(); source = 'uia-name'; meta = $meta }
   }
   return @{ text = ''; source = 'uia-empty'; meta = $meta }
+}
+
+function Get-UiaTextRange($x1, $y1, $x2, $y2, $unit) {
+  $pt1 = New-Object System.Windows.Point([double]$x1, [double]$y1)
+  $pt2 = New-Object System.Windows.Point([double]$x2, [double]$y2)
+  $el = $null
+  try { $el = [System.Windows.Automation.AutomationElement]::FromPoint($pt1) } catch { $el = $null }
+  if (-not $el) {
+    return @{ text = ''; source = 'uia-range-miss'; rects = @() }
+  }
+
+  $tp = Get-UiaTextPattern $el
+  if (-not $tp) {
+    try {
+      $name = [string]$el.Current.Name
+      $br = $el.Current.BoundingRectangle
+      $ct = [string]$el.Current.LocalizedControlType
+      $looksDocument = $ct -match 'document|documentpane|edit'
+      if ($name -and $name.Length -gt 0 -and $name.Length -le 240 -and -not $looksDocument) {
+        return @{
+          text   = $name.Trim()
+          source = 'uia-range-name'
+          rects  = @(@{
+            x = [double]$br.X; y = [double]$br.Y
+            width = [double]$br.Width; height = [double]$br.Height
+          })
+        }
+      }
+    } catch {}
+    return @{ text = ''; source = 'uia-range-empty'; rects = @() }
+  }
+
+  try {
+    $a = $tp.RangeFromPoint($pt1)
+    $b = $null
+    try { $b = $tp.RangeFromPoint($pt2) } catch { $b = $null }
+    $dx = [Math]::Abs(([double]$x2) - ([double]$x1))
+    $dy = [Math]::Abs(([double]$y2) - ([double]$y1))
+
+    if ($b -and ($dx + $dy) -ge 8) {
+      $order = 0
+      try {
+        $order = $a.CompareEndpoints(
+          [System.Windows.Automation.TextPatternRangeEndpoint]::Start,
+          $b,
+          [System.Windows.Automation.TextPatternRangeEndpoint]::Start
+        )
+      } catch { $order = 0 }
+      if ($order -le 0) {
+        [void]$a.MoveEndpointByRange(
+          [System.Windows.Automation.TextPatternRangeEndpoint]::End,
+          $b,
+          [System.Windows.Automation.TextPatternRangeEndpoint]::End
+        )
+      } else {
+        [void]$a.MoveEndpointByRange(
+          [System.Windows.Automation.TextPatternRangeEndpoint]::Start,
+          $b,
+          [System.Windows.Automation.TextPatternRangeEndpoint]::Start
+        )
+      }
+    } else {
+      $textUnit = [System.Windows.Automation.TextUnit]::Word
+      if ($unit -eq 'sentence' -or $unit -eq 'line' -or $unit -eq 'auto' -or -not $unit) {
+        $textUnit = [System.Windows.Automation.TextUnit]::Line
+      } elseif ($unit -eq 'paragraph') {
+        $textUnit = [System.Windows.Automation.TextUnit]::Paragraph
+      }
+      if ($unit -eq 'phrase') {
+        $a.ExpandToEnclosingUnit([System.Windows.Automation.TextUnit]::Word)
+        [void]$a.MoveEndpointByUnit(
+          [System.Windows.Automation.TextPatternRangeEndpoint]::End,
+          [System.Windows.Automation.TextUnit]::Word,
+          4
+        )
+      } else {
+        $a.ExpandToEnclosingUnit($textUnit)
+      }
+    }
+
+    $text = $a.GetText(2500)
+    $raw = @($a.GetBoundingRectangles())
+    $rects = @()
+    foreach ($rc in $raw) {
+      if ($rc.Width -lt 1 -or $rc.Height -lt 1) { continue }
+      $rects += @{
+        x = [double]$rc.X; y = [double]$rc.Y
+        width = [double]$rc.Width; height = [double]$rc.Height
+      }
+    }
+    return @{
+      text   = ([string]$text).Trim()
+      source = 'uia-range'
+      rects  = @($rects)
+      note   = 'RangeFromPoint start/end; Select not called'
+    }
+  } catch {
+    return @{ text = ''; source = 'uia-range-error'; error = [string]$_.Exception.Message; rects = @() }
+  }
 }
 
 function Test-RectIntersect([System.Windows.Rect]$a, [System.Windows.Rect]$b) {
@@ -396,6 +495,9 @@ while ($true) {
       'uia-rect'{
         $unit = [string]$req.unit
         $data = Get-UiaTextInRect $req.x $req.y $req.w $req.h $unit
+      }
+      'uia-range' {
+        $data = Get-UiaTextRange $req.x1 $req.y1 $req.x2 $req.y2 ([string]$req.unit)
       }
       'ocr'     { $data = Invoke-Ocr ([string]$req.path) }
       'exstyle' { $data = Set-NoActivateStyle ([string]$req.hwnd) }

@@ -979,6 +979,23 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;backgr
   display:flex;align-items:center;gap:12px;
   padding:8px 0 14px;
 }
+.term-form{
+  display:flex;align-items:center;gap:8px;
+  padding:0 0 14px;
+  flex-wrap:wrap;
+}
+.term-form input{
+  flex:1;
+  min-width:140px;
+  padding:9px 12px;
+  background:var(--bg-card-glass);
+  border:1px solid var(--border);
+  border-radius:var(--r-input);
+  font-size:13px;
+  color:var(--text-primary);
+}
+.term-form input:focus{border-color:var(--border-focus);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.term-form .term-hint{font-size:11px;color:var(--text-tertiary);width:100%;line-height:1.4}
 .search-box{position:relative;flex:1;max-width:380px}
 .search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-tertiary);pointer-events:none}
 .search-input{
@@ -1435,8 +1452,18 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;backgr
 .side-panel-item .time{font-size:10px;color:var(--text-tertiary);font-family:var(--mono)}
 .side-panel-item .text{
   font-size:12px;color:var(--text-primary);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
   line-height:1.5;
+  white-space:normal;
+  word-break:break-word;
+}
+.side-panel-item .orig{
+  font-size:11px;color:var(--text-tertiary);
+  margin-bottom:2px;
+  -webkit-line-clamp:1;
 }
 
 .file-input{display:none}
@@ -1486,7 +1513,7 @@ button:focus-visible{outline-offset:2px}
           <path d="M5 8h14M5 8l3 3M19 8l-3 3M9 16h6M12 13v6"/>
         </svg>
       </div>
-      <div class="titlebar-title">AI智译<span class="version" id="titlebarVersion">v1.0.3</span></div>
+      <div class="titlebar-title">AI智译<span class="version" id="titlebarVersion">v1.0.4</span></div>
     </div>
     <div class="titlebar-right">
       <button class="win-btn" title="最小化" id="winMin">
@@ -1747,7 +1774,7 @@ button:focus-visible{outline-offset:2px}
         <section class="view list-view" data-view="history">
           <div class="view-header">
             <div class="view-title"><span class="accent-line"></span>历史记录</div>
-            <div class="view-subtitle">最近 50 条翻译与优化记录，本地存储于浏览器，刷新不丢失。</div>
+            <div class="view-subtitle">最近 50 条翻译与优化记录，含划词、剪贴板和截图。保存在本地，刷新不丢失。</div>
           </div>
           <div class="list-toolbar">
             <div class="search-box">
@@ -1771,7 +1798,7 @@ button:focus-visible{outline-offset:2px}
         <section class="view list-view" data-view="glossary">
           <div class="view-header">
             <div class="view-title"><span class="accent-line"></span>术语库</div>
-            <div class="view-subtitle">管理自定义翻译术语，确保专有名词、品牌名、代码符号按你的偏好翻译。</div>
+            <div class="view-subtitle">自定义专有名词、品牌名、代码符号的固定译法。翻译时会强制使用这些译法。</div>
           </div>
           <div class="list-toolbar">
             <div class="search-box">
@@ -1781,11 +1808,15 @@ button:focus-visible{outline-offset:2px}
               </svg>
               <input type="text" class="search-input" id="glossarySearch" placeholder="搜索术语...">
             </div>
-            <button class="btn btn-primary" id="addTermBtn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-              添加术语
-            </button>
           </div>
+          <form class="term-form" id="termForm">
+            <input type="hidden" id="termEditId" value="">
+            <input type="text" id="termSrc" placeholder="源词，如 React / Settings" maxlength="80" autocomplete="off">
+            <input type="text" id="termTgt" placeholder="固定译法，如 React / 设置" maxlength="80" autocomplete="off">
+            <button type="submit" class="btn btn-primary" id="saveTermBtn">添加术语</button>
+            <button type="button" class="btn btn-ghost" id="cancelTermBtn" style="display:none">取消编辑</button>
+            <div class="term-hint">保存后，文本翻译、划词、剪贴板和截图翻译都会优先使用这里的译法。</div>
+          </form>
           <div class="list-scroll">
             <div class="list-host" id="glossaryList">
               <div class="empty">
@@ -1797,7 +1828,7 @@ button:focus-visible{outline-offset:2px}
                   </svg>
                 </div>
                 <div class="empty-title">术语库为空</div>
-                <div class="empty-desc">添加自定义术语后，翻译时将优先使用你的偏好译法。点击「添加术语」开始。</div>
+                <div class="empty-desc">在上方填写源词和固定译法。之后所有翻译通道都会遵守术语表。</div>
               </div>
             </div>
           </div>
@@ -2078,57 +2109,57 @@ button:focus-visible{outline-offset:2px}
                 </div>
               </div>
 
-              <!-- 全局拖动取词翻译 -->
+              <!-- 全局划词 -->
               <div class="settings-section">
                 <div class="settings-section-header">
                   <div class="settings-section-title">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 2v20M2 12h20"/></svg>
-                    全局拖动取词翻译
+                    全局划词
                   </div>
-                  <div class="settings-section-desc">按住快捷键后拖动框选任意软件中的文字/区域。取词过程拦截鼠标与修饰键，不点击原文、不改选区、不抢焦点、不用剪贴板。可选文本走 UI Automation，图片/视频/扫描件走 OCR。目标语言使用顶部语言栏。桌面 LOGO 小球为翻译总开关。</div>
+                  <div class="settings-section-desc">按住快捷键后，像选中文字一样拖动拉取字句并翻译。不点击原文、不改选区、不抢焦点、不用剪贴板。能读到的文本直接取词，图片/视频/扫描件再识别。目标语言跟主窗口语言栏一致。桌面悬浮开关打开后才生效。</div>
                 </div>
                 <div class="settings-body">
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">启用全局拖动取词</div>
-                      <div class="settings-row-desc">开启后：应用内仍可拖选翻译；其他软件中按住快捷键拖动框选即可翻译（需 LOGO 小球开启）</div>
+                      <div class="settings-row-title">启用全局划词</div>
+                      <div class="settings-row-desc">其他软件里按住快捷键拖动即可翻译。应用内也可直接拖选翻译。不含鼠标停留取词。</div>
                     </div>
                     <div class="settings-control">
-                      <div class="toggle-switch" id="hoverTranslateToggle" title="全局拖动取词开关">
+                      <div class="toggle-switch" id="hoverTranslateToggle" title="全局划词开关">
                         <div class="toggle-thumb"></div>
                       </div>
                     </div>
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">取词快捷键</div>
-                      <div class="settings-row-desc">按住后进入取词模式并显示遮罩。默认 Alt；若与系统菜单冲突，可改为 Ctrl / Shift，或 Alt+鼠标侧键</div>
+                      <div class="settings-row-title">划词快捷键</div>
+                      <div class="settings-row-desc">按住后进入划词。默认 Alt；若弹出系统菜单，可改成 Ctrl、Shift，或 Alt+鼠标侧键</div>
                     </div>
                     <div class="settings-control">
                       <select class="settings-select" id="hoverModifierSelect">
-                        <option value="alt">Alt（默认，按住即取词）</option>
+                        <option value="alt">Alt（默认）</option>
                         <option value="ctrl">Ctrl</option>
                         <option value="shift">Shift</option>
-                        <option value="alt+xbutton1">Alt + 鼠标侧键（后退键）</option>
-                        <option value="alt+xbutton2">Alt + 鼠标侧键（前进键）</option>
+                        <option value="alt+xbutton1">Alt + 鼠标侧键（后退）</option>
+                        <option value="alt+xbutton2">Alt + 鼠标侧键（前进）</option>
                       </select>
                     </div>
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">优先 UI Automation</div>
-                      <div class="settings-row-desc">框选范围内只读获取文本；失败或关闭后截取选区走 OCR</div>
+                      <div class="settings-row-title">优先读取文本</div>
+                      <div class="settings-row-desc">先按拖动起止点读取字句；读不到时再识别高亮区域里的图文</div>
                     </div>
                     <div class="settings-control">
-                      <div class="toggle-switch" id="pickPreferUiaToggle" title="优先 UIA">
+                      <div class="toggle-switch" id="pickPreferUiaToggle" title="优先读取文本">
                         <div class="toggle-thumb"></div>
                       </div>
                     </div>
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">UIA 取样单位</div>
-                      <div class="settings-row-desc">框选命中文本时的扩展单位；不可选区域仍走 OCR</div>
+                      <div class="settings-row-title">划词粒度</div>
+                      <div class="settings-row-desc">拖动较短时按该粒度扩展命中文本；图文区域仍走识别</div>
                     </div>
                     <div class="settings-control">
                       <select class="settings-select" id="hoverGranularitySelect">
@@ -2142,8 +2173,8 @@ button:focus-visible{outline-offset:2px}
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">选框颜色</div>
-                      <div class="settings-row-desc">取词遮罩上的框选边框颜色</div>
+                      <div class="settings-row-title">划词高亮</div>
+                      <div class="settings-row-desc">划词过程中的高亮颜色</div>
                     </div>
                     <div class="settings-control">
                       <input type="color" id="pickBorderColorInput" value="#3B82F6" style="width:42px;height:28px;border:1px solid var(--border);border-radius:6px;background:transparent;padding:0">
@@ -2151,8 +2182,8 @@ button:focus-visible{outline-offset:2px}
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">最小选区</div>
-                      <div class="settings-row-desc">小于该尺寸的框选将取消，不翻译（8-80px）</div>
+                      <div class="settings-row-title">最短拖动</div>
+                      <div class="settings-row-desc">拖动位移过短将取消，不翻译（8-80px）</div>
                     </div>
                     <div class="settings-control">
                       <input type="range" id="pickMinSizeSlider" min="8" max="80" step="2" value="12" style="width:140px;accent-color:var(--accent-from)">
@@ -2162,7 +2193,7 @@ button:focus-visible{outline-offset:2px}
                   <div class="settings-row">
                     <div class="settings-row-info">
                       <div class="settings-row-title">调试日志</div>
-                      <div class="settings-row-desc">在主进程日志中输出取词坐标、UIA/OCR 来源等细节</div>
+                      <div class="settings-row-desc">写入运行日志，便于排查划词坐标和文本来源</div>
                     </div>
                     <div class="settings-control">
                       <div class="toggle-switch" id="pickDebugLogToggle" title="调试日志">
@@ -2200,15 +2231,15 @@ button:focus-visible{outline-offset:2px}
                 <div class="settings-section-header">
                   <div class="settings-section-title">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 012-2h2m6 0h2a2 2 0 012 2v2m0 6v2a2 2 0 01-2 2h-2m-6 0H7a2 2 0 01-2-2v-2"/><circle cx="12" cy="12" r="3"/></svg>
-                    截图 OCR 原位替换
+                    截图翻译
                   </div>
-                  <div class="settings-section-desc">Alt+Q 冻结屏幕并框选。按 OCR 文本行 bbox 在截图位置覆盖译文，视觉上替换原文。覆盖层不抢焦点，Esc 或点击外部关闭。</div>
+                  <div class="settings-section-desc">Alt+Q 冻结屏幕后框选区域，识别文字并尽量盖在原文位置。覆盖层不抢焦点，Esc 或点击外部关闭。</div>
                 </div>
                 <div class="settings-body">
                   <div class="settings-row">
                     <div class="settings-row-info">
                       <div class="settings-row-title">快捷键</div>
-                      <div class="settings-row-desc">Alt+Q 进入框选模式（随主快捷键与 LOGO 小球开关联动）</div>
+                      <div class="settings-row-desc">Alt+Q 进入框选（随桌面悬浮开关开关联动）</div>
                     </div>
                     <div class="settings-control">
                       <kbd style="background:var(--bg-hover);border:1px solid var(--border);padding:3px 8px;border-radius:4px;font-size:11px;font-family:monospace">Alt+Q</kbd>
@@ -2216,12 +2247,12 @@ button:focus-visible{outline-offset:2px}
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">OCR 引擎</div>
-                      <div class="settings-row-desc">Windows OCR 返回文字块坐标；失败时用视觉模型兜底（无精确 bbox 时退化为浮动窗）</div>
+                      <div class="settings-row-title">识别引擎</div>
+                      <div class="settings-row-desc">系统识别可对准原文位置；失败时用视觉模型，必要时改为浮动窗</div>
                     </div>
                     <div class="settings-control">
                       <select class="settings-select" id="ocrEngineSelect">
-                        <option value="windows">Windows OCR（推荐）</option>
+                        <option value="windows">系统识别（推荐）</option>
                         <option value="vision">仅视觉模型</option>
                       </select>
                     </div>
@@ -2299,7 +2330,7 @@ button:focus-visible{outline-offset:2px}
               <div class="about-tagline">Vibe Coding 辅助翻译与提示词优化工具。基于 Electron 构建，集成多模型 AI 能力。</div>
               <div class="about-version-badge">
                 <span class="dot"></span>
-                <span id="aboutVersionTag">v1.0.3</span>
+                <span id="aboutVersionTag">v1.0.4</span>
               </div>
             </div>
 
@@ -2314,7 +2345,7 @@ button:focus-visible{outline-offset:2px}
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">应用版本</span>
-                  <span class="about-info-value" id="aboutAppVersion">1.0.3</span>
+                  <span class="about-info-value" id="aboutAppVersion">1.0.4</span>
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">Electron</span>
@@ -2446,13 +2477,7 @@ button:focus-visible{outline-offset:2px}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
-      <div class="side-panel-body" id="sidePanelBody">
-        <div class="side-panel-empty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-          <div class="title">暂无历史记录</div>
-          <div class="desc">翻译或优化后会自动保存到此</div>
-        </div>
-      </div>
+      <div class="side-panel-body" id="sidePanelBody"></div>
     </aside>
   </div>
 </div>
@@ -2473,8 +2498,9 @@ button:focus-visible{outline-offset:2px}
       <div class="welcome-desc">Windows 桌面 AI 翻译与提示词优化工具<br>使用前需配置大模型 API Key</div>
       <div class="welcome-features">
         <div class="welcome-feature"><span class="check">✓</span>文本翻译（DeepSeek/通义千问）</div>
-        <div class="welcome-feature"><span class="check">✓</span>图片翻译（通义千问 VL 视觉模型）</div>
-        <div class="welcome-feature"><span class="check">✓</span>七步提示词优化框架</div>
+        <div class="welcome-feature"><span class="check">✓</span>全局划词、截图翻译、剪贴板翻译</div>
+        <div class="welcome-feature"><span class="check">✓</span>术语库固定译法</div>
+        <div class="welcome-feature"><span class="check">✓</span>七步提示词优化</div>
         <div class="welcome-feature"><span class="check">✓</span>全局快捷键 Ctrl+Shift+T 唤起</div>
       </div>
     </div>
@@ -2668,7 +2694,7 @@ const state = {
   uploadedImage: null,
   realtime: false,
   sidePanelTab: "history",
-  sidePanelOpen: false,
+  sidePanelOpen: true,
   glossary: [],
   favorites: []
 };
@@ -2703,6 +2729,7 @@ function syncConfigToMain(){
     pickMinSize: state.settings.pickMinSize || 12,
     pickBorderColor: state.settings.pickBorderColor || "#3B82F6",
     pickDebugLog: !!state.settings.pickDebugLog,
+    glossary: (state.glossary || []).map((g) => ({ src: g.src, tgt: g.tgt })),
     targetLang: tgt,
     sourceLang: src,
     theme: state.settings.theme || "dark"
@@ -2950,14 +2977,23 @@ document.querySelectorAll(".nav-item[data-view]").forEach(n=>{
 });
 
 // ============ 翻译模块 ============
-const TRANSLATE_SYSTEM = `你是一名专业翻译引擎。任务：将用户输入的文本翻译为目标语言。
+function glossaryInstruction(){
+  const terms = (state.glossary || []).filter(g => g && g.src && g.tgt);
+  if(!terms.length) return "";
+  const lines = terms.slice(0, 80).map(g => `- ${g.src} → ${g.tgt}`).join("\n");
+  return `\n\n必须遵守以下术语表。遇到对应源词时使用指定译法，不得另译：\n${lines}`;
+}
+
+function buildTranslateSystem(){
+  return `你是一名专业翻译引擎。任务：将用户输入的文本翻译为目标语言。
 
 规则：
-1. 保留代码片段、变量名、API 名称、品牌名不译（如 React、useState、GitHub）
+1. 保留代码片段、变量名、API 名称、品牌名不译（如 React、useState、GitHub），除非术语表另有规定
 2. 界面文本翻译要符合中文软件表达习惯（如 "Settings" → "设置"，"Sign in" → "登录"）
 3. 仅输出译文，不要任何解释或前后缀
 4. 如果源文本已是目标语言，原样返回
-5. 多行文本保持原有换行结构`;
+5. 多行文本保持原有换行结构` + glossaryInstruction();
+}
 
 async function doTranslate(){
   const input = document.getElementById("translateInput").value.trim();
@@ -3003,7 +3039,7 @@ async function doTranslate(){
       ];
 
       const translated = await callAI([
-        { role: "system", content: TRANSLATE_SYSTEM },
+        { role: "system", content: buildTranslateSystem() },
         { role: "user", content: userContent }
       ], false, { vision: true });
 
@@ -3020,6 +3056,7 @@ async function doTranslate(){
 
       addHistory({
         type: "translate",
+        source: "image",
         input: "[图片翻译]",
         output: translated,
         meta: {srcLang, tgtLang}
@@ -3035,7 +3072,7 @@ async function doTranslate(){
 ${sourceText}`;
 
     const translated = await callAI([
-      {role:"system", content: TRANSLATE_SYSTEM},
+      {role:"system", content: buildTranslateSystem()},
       {role:"user", content: userPrompt}
     ]);
 
@@ -3439,13 +3476,41 @@ function renderOptimizeResult(parsed, originalInput){
 document.getElementById("optimizeBtn").addEventListener("click", doOptimize);
 
 // ============ 历史记录 ============
+function historyTypeLabel(h){
+  if(h.type === "optimize") return "优化";
+  const src = h.source || (h.meta && h.meta.source) || "";
+  if(src === "pick") return "划词";
+  if(src === "clipboard") return "剪贴板";
+  if(src === "screenshot") return "截图";
+  if(src === "image") return "图片";
+  return "翻译";
+}
+
+function historyPreview(h){
+  const input = String(h.input || "").replace(/\s+/g, " ").trim();
+  const output = String(h.output || "").replace(/\s+/g, " ").trim();
+  return { input, output };
+}
+
 function addHistory(item){
-  item.time = Date.now();
+  const input = String(item.input || "").trim();
+  const output = String(item.output || "").trim();
+  if(!input && !output) return;
+  const now = Date.now();
+  const last = state.history[0];
+  if(last && last.input === input && last.output === output && now - last.time < 4000) return;
+  item.time = now;
   item.id = "h_" + item.time + "_" + Math.random().toString(36).slice(2,6);
+  item.input = input;
+  item.output = output;
   state.history.unshift(item);
   if(state.history.length > 50) state.history = state.history.slice(0,50);
   Storage.saveHistory();
+  renderSidePanel();
+  const active = document.querySelector(".view.active");
+  if(active && active.dataset.view === "history") renderHistory();
 }
+window.addHistory = addHistory;
 
 function renderHistory(){
   const list = document.getElementById("historyList");
@@ -3475,7 +3540,8 @@ function renderHistory(){
     const typeIcon = h.type === "translate"
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14M5 8l3 3M19 8l-3 3M9 16h6M12 13v6"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 5.6L20 10l-4.5 3.6L17 20l-5-3.2L7 20l1.5-6.4L4 10l5.6-1.4z"/></svg>';
-    const typeLabel = h.type === "translate" ? "翻译" : "优化";
+    const typeLabel = historyTypeLabel(h);
+    const preview = historyPreview(h);
 
     return `<div class="list-item" data-id="${h.id}">
       <div class="list-icon ${h.type}">${typeIcon}</div>
@@ -3484,8 +3550,8 @@ function renderHistory(){
           <span class="list-type ${h.type}">${typeLabel}</span>
           <span class="list-time">${timeStr}</span>
         </div>
-        <div class="list-input">输入：${escapeHtml((h.input || "").slice(0,100))}</div>
-        <div class="list-output">${escapeHtml((h.output || "").slice(0,100))}</div>
+        <div class="list-input">${preview.input ? "原文：" + escapeHtml(preview.input.slice(0,120)) : ""}</div>
+        <div class="list-output">${preview.output ? escapeHtml(preview.output.slice(0,160)) : "（无译文）"}</div>
       </div>
       <div class="list-actions">
         <button class="list-action" data-action="copy" data-id="${h.id}" title="复制输出">
@@ -3513,27 +3579,30 @@ window.deleteHistory = function(id){
 // 历史记录事件委托（复制/收藏/删除）
 document.getElementById("historyList").addEventListener("click", e=>{
   const btn = e.target.closest("[data-action]");
-  if(!btn) return;
-  const action = btn.dataset.action;
-  const id = btn.dataset.id;
-  const item = state.history.find(h=>h.id === id);
-  if(!item) return;
-  if(action === "copy"){
-    copyToClipboard(item.output || "");
-  }else if(action === "delete"){
-    window.deleteHistory(id);
-  }else if(action === "favorite"){
-    // 加入收藏
-    const exists = state.favorites.find(f=>f.id === id);
-    if(exists){
-      toast("已在收藏中","info");
-      return;
+  const row = e.target.closest(".list-item");
+  if(btn){
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    const item = state.history.find(h=>h.id === id);
+    if(!item) return;
+    if(action === "copy"){
+      copyToClipboard(item.output || "");
+    }else if(action === "delete"){
+      window.deleteHistory(id);
+    }else if(action === "favorite"){
+      const exists = state.favorites.find(f=>f.id === id);
+      if(exists){
+        toast("已在收藏中","info");
+        return;
+      }
+      state.favorites.unshift({...item});
+      Storage.saveFavorites();
+      toast("已加入收藏","success");
+      renderSidePanel();
     }
-    state.favorites.unshift({...item});
-    Storage.saveFavorites();
-    toast("已加入收藏","success");
-    renderSidePanel();
+    return;
   }
+  if(row && row.dataset.id) restoreHistoryItem(row.dataset.id);
 });
 
 document.getElementById("historySearch").addEventListener("input", renderHistory);
@@ -3552,22 +3621,64 @@ document.getElementById("clearHistory").addEventListener("click", ()=>{
 
 // ============ 术语库 ============
 document.getElementById("glossarySearch").addEventListener("input", renderGlossary);
-document.getElementById("addTermBtn").addEventListener("click", ()=>{
-  const src = prompt("请输入源词（外语）：");
-  if(!src) return;
-  const tgt = prompt("请输入译文：");
-  if(!tgt) return;
-  state.glossary.unshift({
-    id: "g_" + Date.now(),
-    src: src,
-    tgt: tgt,
-    time: Date.now()
-  });
+
+function resetTermForm(){
+  document.getElementById("termEditId").value = "";
+  document.getElementById("termSrc").value = "";
+  document.getElementById("termTgt").value = "";
+  document.getElementById("saveTermBtn").textContent = "添加术语";
+  document.getElementById("cancelTermBtn").style.display = "none";
+}
+
+function fillTermForm(g){
+  document.getElementById("termEditId").value = g.id;
+  document.getElementById("termSrc").value = g.src || "";
+  document.getElementById("termTgt").value = g.tgt || "";
+  document.getElementById("saveTermBtn").textContent = "保存修改";
+  document.getElementById("cancelTermBtn").style.display = "";
+  document.getElementById("termSrc").focus();
+}
+
+document.getElementById("termForm").addEventListener("submit", (e)=>{
+  e.preventDefault();
+  const src = document.getElementById("termSrc").value.trim();
+  const tgt = document.getElementById("termTgt").value.trim();
+  if(!src || !tgt){
+    toast("请填写源词和译法","error");
+    return;
+  }
+  const editId = document.getElementById("termEditId").value;
+  if(editId){
+    const rec = state.glossary.find(g=>g.id === editId);
+    if(rec){
+      rec.src = src;
+      rec.tgt = tgt;
+      rec.time = Date.now();
+    }
+    toast("术语已更新","success");
+  }else{
+    const dup = state.glossary.find(g => String(g.src).toLowerCase() === src.toLowerCase());
+    if(dup){
+      dup.tgt = tgt;
+      dup.time = Date.now();
+      toast("已覆盖同名术语","success");
+    }else{
+      state.glossary.unshift({
+        id: "g_" + Date.now(),
+        src,
+        tgt,
+        time: Date.now()
+      });
+      toast("术语已添加","success");
+    }
+  }
   Storage.saveGlossary();
+  syncConfigToMain();
   renderGlossary();
   renderSidePanel();
-  toast("术语已添加","success");
+  resetTermForm();
 });
+document.getElementById("cancelTermBtn").addEventListener("click", resetTermForm);
 
 function renderGlossary(){
   const list = document.getElementById("glossaryList");
@@ -3586,7 +3697,7 @@ function renderGlossary(){
         </svg>
       </div>
       <div class="empty-title">${search ? "未找到术语" : "术语库为空"}</div>
-      <div class="empty-desc">${search ? "尝试更换关键词" : "添加自定义术语后，翻译时将优先使用你的偏好译法"}</div>
+      <div class="empty-desc">${search ? "尝试更换关键词" : "在上方填写源词和固定译法，翻译时会强制使用"}</div>
     </div>`;
     return;
   }
@@ -3603,9 +3714,12 @@ function renderGlossary(){
           <span class="list-time">${timeStr}</span>
         </div>
         <div class="list-input">${escapeHtml(g.src)}</div>
-        <div class="list-output">→ ${escapeHtml(g.tgt)}</div>
+        <div class="list-output">固定译法：${escapeHtml(g.tgt)}</div>
       </div>
       <div class="list-actions">
+        <button class="list-action" data-gaction="edit" data-id="${g.id}" title="编辑">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </button>
         <button class="list-action danger" data-gaction="delete" data-id="${g.id}" title="删除">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
         </button>
@@ -3617,15 +3731,26 @@ function renderGlossary(){
 // 术语库事件委托
 document.getElementById("glossaryList").addEventListener("click", e=>{
   const btn = e.target.closest("[data-gaction]");
-  if(!btn) return;
-  const action = btn.dataset.gaction;
-  const id = btn.dataset.id;
-  if(action === "delete"){
-    state.glossary = state.glossary.filter(g=>g.id !== id);
-    Storage.saveGlossary();
-    renderGlossary();
-    renderSidePanel();
-    toast("已删除","info");
+  const row = e.target.closest(".list-item");
+  if(btn){
+    const action = btn.dataset.gaction;
+    const id = btn.dataset.id;
+    if(action === "delete"){
+      state.glossary = state.glossary.filter(g=>g.id !== id);
+      Storage.saveGlossary();
+      syncConfigToMain();
+      renderGlossary();
+      renderSidePanel();
+      toast("已删除","info");
+    }else if(action === "edit"){
+      const rec = state.glossary.find(g=>g.id === id);
+      if(rec) fillTermForm(rec);
+    }
+    return;
+  }
+  if(row && row.dataset.id){
+    const rec = state.glossary.find(g=>g.id === row.dataset.id);
+    if(rec) fillTermForm(rec);
   }
 });
 
@@ -3864,12 +3989,12 @@ if(hoverTranslateToggle){
     applyBallStateToModule();
     if(state.settings.hoverTranslateEnabled){
       if(!ballEnabled){
-        toast("设置已保存。桌面 LOGO 小球当前为关闭状态，点击小球开启后生效", "info");
+        toast("设置已保存。桌面悬浮开关当前是关闭的，点一下小球后生效", "info");
       }else{
-        toast("全局拖动取词已开启：按住 Alt 拖动框选即可翻译", "info");
+        toast("全局划词已开启：按住 Alt 拖动即可翻译", "info");
       }
     }else{
-      toast("全局拖动取词已关闭", "info");
+      toast("全局划词已关闭", "info");
     }
   });
 }
@@ -3936,7 +4061,7 @@ if(screenshotTestBtn){
 // ============ 数据导出/导入 ============
 async function exportData(){
   try{
-    let appVersion = "1.0.3";
+    let appVersion = "1.0.4";
     try{
       if(window.electronAPI?.getAppVersion){
         appVersion = await window.electronAPI.getAppVersion();
@@ -4087,8 +4212,8 @@ document.querySelectorAll(".side-tab").forEach(tab=>{
 });
 
 function renderSidePanel(){
-  if(!state.sidePanelOpen) return;
   const body = document.getElementById("sidePanelBody");
+  if(!body) return;
   const tab = state.sidePanelTab;
 
   if(tab === "history"){
@@ -4096,21 +4221,21 @@ function renderSidePanel(){
       body.innerHTML = `<div class="side-panel-empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
         <div class="title">暂无历史记录</div>
-        <div class="desc">翻译或优化后会自动保存到此</div>
+        <div class="desc">主窗口翻译、划词、剪贴板和截图结果会自动出现在这里</div>
       </div>`;
       return;
     }
     body.innerHTML = state.history.slice(0,20).map(h=>{
       const time = new Date(h.time);
       const timeStr = time.toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
-      const typeLabel = h.type === "translate" ? "翻译" : "优化";
-      const text = (h.output || "").slice(0,80);
+      const preview = historyPreview(h);
       return `<div class="side-panel-item" data-id="${h.id}" data-stype="history">
         <div class="meta">
-          <span class="type">${typeLabel}</span>
+          <span class="type">${historyTypeLabel(h)}</span>
           <span class="time">${timeStr}</span>
         </div>
-        <div class="text">${escapeHtml(text)}</div>
+        ${preview.input ? `<div class="text orig">${escapeHtml(preview.input.slice(0,80))}</div>` : ""}
+        <div class="text">${escapeHtml(preview.output ? preview.output.slice(0,120) : "（无译文）")}</div>
       </div>`;
     }).join("");
   }else if(tab === "glossary"){
@@ -4118,16 +4243,17 @@ function renderSidePanel(){
       body.innerHTML = `<div class="side-panel-empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 012 2v14H6a2 2 0 01-2-2V4z"/><path d="M8 8h7M8 12h7M8 16h5"/></svg>
         <div class="title">术语库为空</div>
-        <div class="desc">添加自定义术语后会显示在此</div>
+        <div class="desc">添加源词和固定译法后，翻译会优先使用</div>
       </div>`;
       return;
     }
     body.innerHTML = state.glossary.slice(0,30).map(g=>{
-      return `<div class="side-panel-item">
+      return `<div class="side-panel-item" data-id="${g.id}" data-stype="glossary">
         <div class="meta">
           <span class="type">术语</span>
         </div>
-        <div class="text">${escapeHtml(g.src)} → ${escapeHtml(g.tgt)}</div>
+        <div class="text orig">${escapeHtml(g.src)}</div>
+        <div class="text">${escapeHtml(g.tgt)}</div>
       </div>`;
     }).join("");
   }else if(tab === "favorite"){
@@ -4135,30 +4261,53 @@ function renderSidePanel(){
       body.innerHTML = `<div class="side-panel-empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/></svg>
         <div class="title">暂无收藏</div>
-        <div class="desc">在历史记录中点击星标按钮即可收藏</div>
+        <div class="desc">在历史记录中点击星标即可收藏</div>
       </div>`;
       return;
     }
     body.innerHTML = state.favorites.slice(0,30).map(f=>{
-      const typeLabel = f.type === "translate" ? "翻译" : "优化";
-      const text = (f.output || "").slice(0,80);
-      return `<div class="side-panel-item">
+      const preview = historyPreview(f);
+      return `<div class="side-panel-item" data-id="${f.id}" data-stype="favorite">
         <div class="meta">
-          <span class="type">${typeLabel}</span>
+          <span class="type">${historyTypeLabel(f)}</span>
         </div>
-        <div class="text">${escapeHtml(text)}</div>
+        ${preview.input ? `<div class="text orig">${escapeHtml(preview.input.slice(0,80))}</div>` : ""}
+        <div class="text">${escapeHtml(preview.output ? preview.output.slice(0,120) : "（无译文）")}</div>
       </div>`;
     }).join("");
   }
 }
 
-// 右侧面板项点击：复制
+function restoreHistoryItem(id){
+  const rec = state.history.find(h=>h.id === id) || state.favorites.find(f=>f.id === id);
+  if(!rec) return;
+  if(rec.type === "optimize"){
+    switchView("optimize");
+    document.getElementById("optimizeInput").value = rec.input || "";
+    toast("已填入优化原文","info");
+    return;
+  }
+  switchView("translate");
+  document.getElementById("translateInput").value = rec.input || "";
+  const result = document.getElementById("translateResult");
+  result.classList.remove("loading","streaming");
+  result.textContent = rec.output || "";
+  document.getElementById("translateMeta").textContent = "来自历史记录";
+}
+
+// 右侧面板项点击：回填翻译 / 编辑术语
 document.getElementById("sidePanelBody").addEventListener("click", e=>{
   const item = e.target.closest(".side-panel-item[data-id]");
   if(!item) return;
   const id = item.dataset.id;
-  const rec = state.history.find(h=>h.id === id);
-  if(rec) copyToClipboard(rec.output || "");
+  const stype = item.dataset.stype;
+  if(stype === "glossary"){
+    switchView("glossary");
+    const rec = state.glossary.find(g=>g.id === id);
+    if(rec) fillTermForm(rec);
+    return;
+  }
+  restoreHistoryItem(id);
 });
 
 // ============ 键盘快捷键 ============
@@ -4256,6 +4405,7 @@ function init(){
   updateHoverToggle();
   renderHistory();
   renderGlossary();
+  renderSidePanel();
   setNetStatus("online");
   // 启动剪贴板监听
   startClipboardWatch();
@@ -4281,6 +4431,17 @@ function init(){
   }
   syncConfigToMain();
   applyBallStateToModule();
+  if(window.electronAPI?.onHistoryAdd){
+    window.electronAPI.onHistoryAdd((item)=>{
+      addHistory({
+        type: item.type || "translate",
+        source: item.source || "pick",
+        input: item.input || "",
+        output: item.output || "",
+        meta: item.meta || {}
+      });
+    });
+  }
   // 同步 LOGO 小球状态：初始查询 + 持续监听主进程推送
   if(window.electronAPI?.ball){
     window.electronAPI.ball.getState().then((v)=>{
@@ -4290,7 +4451,7 @@ function init(){
     window.electronAPI.ball.onStateChanged((v)=>{
       ballEnabled = !!v;
       applyBallStateToModule();
-      toast(v ? "翻译已开启（应用内取词 + 全局拖动取词/截图快捷键已生效）" : "翻译已关闭（应用内取词与应用外快捷键已停止）", "info");
+      toast(v ? "翻译已开启：应用内划词、全局划词、截图快捷键已生效" : "翻译已关闭：划词与快捷键已停止", "info");
     });
   }
 }
@@ -4715,24 +4876,20 @@ window.addEventListener('unhandledrejection', (event)=>{
 });
 
 // ============================================================
-// 前端取词翻译模块（Shadow DOM 隔离）
-// 鼠标停留 → 识别 DOM 文本词组 → 显示翻译按钮 → 点击才翻译
-// 不自动翻译，避免打扰和频繁请求
+// 前端拖选取词翻译（Shadow DOM 隔离）
+// 应用内拖选字句 → 显示翻译按钮 → 点击才翻译
+// 不含停留取词，避免鼠标划过就弹出提示
 // ============================================================
 (function selectionTranslateModule(){
   'use strict';
 
   // ====== 配置 ======
-  const HOVER_DELAY = 200;     // 悬停触发延迟
-  const DEBOUNCE_MS = 80;     // pointermove 防抖
   const DRAG_THRESHOLD = 4;   // 拖动判定阈值 px
   const MAX_TEXT_LEN = 200;   // 最大选中文本长度
 
-  // ====== 状态机：idle → hovering → pending-drag → dragging → selected → translating ======
+  // ====== 状态机：idle → pending-drag → dragging → selected → translating ======
   let enabled = false;
   let state = 'idle';
-  let hoverTimer = null;
-  let debounceTimer = null;
   let currentReqId = 0;
   let rafId = null;
   let shadowHost = null, shadowRoot = null;
@@ -4853,12 +5010,6 @@ window.addEventListener('unhandledrejection', (event)=>{
     translateBtn.textContent = '译';
     shadowRoot.appendChild(translateBtn);
 
-    // 悬停提示
-    hoverHint = document.createElement('div');
-    hoverHint.className = 'st-hint';
-    hoverHint.textContent = '按住拖选翻译';
-    shadowRoot.appendChild(hoverHint);
-
     // 译文浮层
     resultPopup = document.createElement('div');
     resultPopup.className = 'st-popup';
@@ -4924,7 +5075,7 @@ window.addEventListener('unhandledrejection', (event)=>{
     cancelAll();
   }
 
-  // ====== 悬停识别（只改光标 + 提示，不显示按钮） ======
+  // ====== 指针移动：仅处理拖选启动与选中后离开会话 ======
   function onPointerMove(e){
     if(!enabled) return;
 
@@ -4946,31 +5097,8 @@ window.addEventListener('unhandledrejection', (event)=>{
 
     // 拖动中（由 overlayLayer 接管，此处保险跳过）
     if(state === 'dragging') return;
-    // 已选中：鼠标远离会话区域（浮层/按钮/高亮）后自动结束会话，恢复悬停能力
+    // 已选中：鼠标远离会话区域（浮层/按钮/高亮）后自动结束会话
     if(state === 'selected'){ maybeEndSessionAway(e.clientX, e.clientY); return; }
-    if(state === 'translating') return;
-
-    // 悬停识别（idle / hovering）
-    const x = e.clientX, y = e.clientY;
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(()=>{
-      clearTimeout(hoverTimer);
-      hoverTimer = setTimeout(()=>handleHover(x, y), HOVER_DELAY);
-    }, DEBOUNCE_MS);
-  }
-
-  function handleHover(x, y){
-    if(state !== 'idle' && state !== 'hovering') return;
-    const info = getTextAtPoint(x, y);
-    if(!info){
-      if(state === 'hovering'){ resetCursor(); hideHint(); state = 'idle'; }
-      return;
-    }
-    // 改变光标 + 显示提示
-    if(state !== 'hovering') prevBodyCursor = document.body.style.cursor;
-    document.body.style.cursor = 'text';
-    state = 'hovering';
-    showHint(x, y);
   }
 
   function getTextAtPoint(x, y){
@@ -5019,7 +5147,6 @@ window.addEventListener('unhandledrejection', (event)=>{
     const x = e.clientX, y = e.clientY;
     const info = getTextAtPoint(x, y);
     if(!info){
-      if(state === 'hovering'){ resetCursor(); hideHint(); state = 'idle'; }
       return;
     }
     // 结束旧会话（允许无限次重复翻译），并取消在途翻译请求
@@ -5179,15 +5306,8 @@ window.addEventListener('unhandledrejection', (event)=>{
     }
   }
 
-  function showHint(x, y){
-    hoverHint.style.left = (x + 14) + 'px';
-    hoverHint.style.top = (y + 18) + 'px';
-    hoverHint.classList.add('visible');
-  }
-
-  function hideHint(){
-    hoverHint.classList.remove('visible');
-  }
+  function showHint(){}
+  function hideHint(){}
 
   function resetCursor(){
     if(prevBodyCursor !== null){
@@ -5275,7 +5395,7 @@ window.addEventListener('unhandledrejection', (event)=>{
 2. 保留代码、路径、URL、变量名等原文
 3. 编程术语保留英文原词并附中文解释
 4. 保持原文的换行和段落结构
-5. 译文必须是${finalTarget}，不能与原文相同语言`;
+5. 译文必须是${finalTarget}，不能与原文相同语言` + (typeof glossaryInstruction === "function" ? glossaryInstruction() : "");
       const messages = [
         { role: 'system', content: system },
         { role: 'user', content: word }
@@ -5312,6 +5432,9 @@ window.addEventListener('unhandledrejection', (event)=>{
         <div class="st-popup-actions"><span class="st-action-btn st-copy-btn">复制</span></div>`);
       const copyBtn = resultPopup.querySelector('.st-copy-btn');
       if(copyBtn) copyBtn._text = translation;
+      if(typeof window.addHistory === 'function'){
+        window.addHistory({ type: 'translate', source: 'pick', input: word, output: translation });
+      }
     }catch(e){
       if(reqId !== currentReqId) return;
       showPopup(rect, `

@@ -210,6 +210,11 @@ async function runOcrTranslate(screenRect) {
   };
   resultWin.hide('inplace');
   showInplace(screenRect, lines);
+  resultWin.notifyHistory({
+    source: 'screenshot',
+    original: (ocrResult.lines || []).map((l) => l.text).join('\n'),
+    translation: (lines || []).map((l) => l.translation || '').filter(Boolean).join('\n')
+  });
 }
 
 function showInplace(screenRect, lines) {

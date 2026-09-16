@@ -54,6 +54,7 @@ let cachedConfig = {
   pickMinSize: 12,
   pickBorderColor: '#3B82F6',
   pickDebugLog: false,
+  glossary: [],
   theme: 'dark'
 };
 
@@ -171,7 +172,7 @@ async function translateText(text, targetLang = '中文', srcLang = 'auto') {
 2. 保留代码、路径、URL、变量名等原文
 3. 编程术语保留英文原词并附中文解释
 4. 保持原文的换行和段落结构
-5. 如果原文已经是${finalTarget}，翻译为${isChinese ? 'English' : '简体中文'}`;
+5. 如果原文已经是${finalTarget}，翻译为${isChinese ? 'English' : '简体中文'}` + glossaryBlock();
   const messages = [
     { role: 'system', content: system },
     { role: 'user', content: text }
@@ -191,7 +192,7 @@ async function ocrAndTranslate(imageBase64, opts = {}) {
 5. 如果识别到的文字已经是${targetLang}，将其翻译为${targetLang === '简体中文' || targetLang === '中文' ? 'English' : '简体中文'}
 6. 若图片中没有文字或模糊无法识别，只回复"未识别到文字"
 
-重要：译文必须与原文不同语言。中文→${targetLang === '简体中文' || targetLang === '中文' ? 'English' : '简体中文'}，英文→${targetLang}。`;
+重要：译文必须与原文不同语言。中文→${targetLang === '简体中文' || targetLang === '中文' ? 'English' : '简体中文'}，英文→${targetLang}。` + glossaryBlock();
     const userContent = [
       { type: 'text', text: `请识别这张截图中的文字并翻译为${targetLang}。` },
       { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}` } }
@@ -219,6 +220,14 @@ function defaultTarget() {
   return getConfig().targetLang || '简体中文';
 }
 
+function glossaryBlock() {
+  const g = Array.isArray(cachedConfig.glossary) ? cachedConfig.glossary : [];
+  const terms = g.filter((t) => t && t.src && t.tgt).slice(0, 80);
+  if (!terms.length) return '';
+  return '\n术语表（必须遵守，遇到源词用指定译法，不得另译）：\n' +
+    terms.map((t) => `${t.src} => ${t.tgt}`).join('\n');
+}
+
 // 严格按用户设置的目标语言翻译，不做中英自动对调
 async function translateStrict(text, targetLang, srcLang = 'auto', opts = {}) {
   const finalTarget = targetLang || defaultTarget();
@@ -228,7 +237,7 @@ async function translateStrict(text, targetLang, srcLang = 'auto', opts = {}) {
 1. 只返回译文，不要任何解释或前缀
 2. 保留代码、路径、URL、变量名等原文
 3. 保持原文的换行和段落结构
-4. 若原文已经是${finalTarget}，原样返回原文`;
+4. 若原文已经是${finalTarget}，原样返回原文` + glossaryBlock();
   return await chat([
     { role: 'system', content: system },
     { role: 'user', content: text }
@@ -240,7 +249,7 @@ async function translateLine(text, targetLang, context = '', opts = {}) {
   const system = `你是专业翻译。把「当前行」翻译为${finalTarget}。
 只返回这一行的译文，不要解释，不要引号，不要编号。
 尽量保持长度接近原文，便于原位覆盖。
-上下文仅供参考，不要翻译上下文。`;
+上下文仅供参考，不要翻译上下文。` + glossaryBlock();
   const user = (context ? context + '\n\n' : '') + '当前行: ' + text;
   return await chat([
     { role: 'system', content: system },
@@ -252,7 +261,7 @@ async function translateWord(word, targetLang, opts = {}) {
   const finalTarget = targetLang || defaultTarget();
   const system = `你是词典助手。目标语言：${finalTarget}。
 只返回 JSON，不要 Markdown：{"phonetic":"音标或空","translation":"最常用译文","definitions":["简短释义1","释义2"]}
-若不是单词而是短语，phonetic 留空，translation 给短语译文。`;
+若不是单词而是短语，phonetic 留空，translation 给短语译文。` + glossaryBlock();
   const raw = await chat([
     { role: 'system', content: system },
     { role: 'user', content: word }

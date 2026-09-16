@@ -2,5 +2,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('pickAPI', {
-  onState: (cb) => ipcRenderer.on('pick:state', (_e, data) => cb(data))
+  onState: (cb) => ipcRenderer.on('pick:state', (_e, data) => cb(data)),
+  drag: (payload) => ipcRenderer.send('pick:drag', payload)
 });

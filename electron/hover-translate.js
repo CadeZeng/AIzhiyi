@@ -1,14 +1,14 @@
 // ============================================================
-// AI智译 · 全局拖动框选取词翻译
+// AI智译 · 全局划词取词翻译
 //
 // 按住配置的修饰键（默认 Alt）进入取词模式：
 // 1) WH_KEYBOARD_LL / WH_MOUSE_LL 吞掉修饰键、左键、滚轮等，不转发到底层
-// 2) 全屏透明置顶遮罩（WS_EX_NOACTIVATE，不穿透）绘制选框
-// 3) 松开修饰键后隐藏遮罩，UIA 只读框选文本，失败则 OCR
+// 2) 全屏透明置顶遮罩（WS_EX_NOACTIVATE，不穿透）绘制划词高亮
+// 3) 松开修饰键后隐藏遮罩，UIA 按起止点拉取字句，失败则 OCR
 // 4) 不用剪贴板 / SendInput / 模拟点击，不改原生选区与焦点
 // ============================================================
 
-const { BrowserWindow, screen } = require('electron');
+const { BrowserWindow, screen, ipcMain } = require('electron');
 const path = require('path');
 const log = require('./logger');
 const ai = require('./ai-call');
@@ -32,6 +32,7 @@ let lastAbort = null;
 let session = null;
 let lastFallback = { alt: false, ctrl: false, shift: false, lbutton: false, escape: false };
 let subscribed = false;
+let lastPollLbutton = false;
 
 function cfg() { return ai.getConfig(); }
 
@@ -90,6 +91,7 @@ function ensureSubscribed() {
   if (subscribed) return;
   subscribed = true;
   winHost.onEvent(onHostEvent);
+  ipcMain.on('pick:drag', onOverlayDrag);
   try {
     screen.on('display-metrics-changed', relayoutOverlay);
     screen.on('display-added', relayoutOverlay);
@@ -111,7 +113,7 @@ function newSession() {
     active: true,
     dragging: false,
     start: null,
-    rect: null,
+    highlights: [],
     lastPos: screen.getCursorScreenPoint()
   };
 }
@@ -155,40 +157,100 @@ function onHostEvent(msg) {
 function onHookMouse(msg) {
   if (!session || !session.active) return;
   const dip = physicalToDip(Number(msg.x) || 0, Number(msg.y) || 0);
-  session.lastPos = dip;
-  if (msg.type === 'down') {
-    session.dragging = true;
-    session.start = { x: dip.x, y: dip.y };
-    session.rect = { x: dip.x, y: dip.y, width: 0, height: 0 };
-    pushOverlay();
-  } else if (msg.type === 'up') {
-    session.dragging = false;
-    if (session.start) {
-      session.rect = makeRect(session.start, dip);
-      pushOverlay();
-    }
+  applyPointer(msg.type, dip);
+}
+
+function onOverlayDrag(_e, payload) {
+  if (!session || !session.active || !payload) return;
+  const toScreen = (pt) => {
+    if (!pt) return null;
+    return {
+      x: overlayOrigin.x + Number(pt.x || 0),
+      y: overlayOrigin.y + Number(pt.y || 0)
+    };
+  };
+  if (payload.type === 'down') {
+    applyPointer('down', toScreen(payload.start || { x: payload.x, y: payload.y }));
+    return;
+  }
+  const end = toScreen(payload.end);
+  if (end) {
+    session.lastPos = end;
+    if (payload.type === 'up') session.dragging = false;
+  }
+  if (Array.isArray(payload.highlights) && payload.highlights.length) {
+    session.highlights = payload.highlights.map((r) => ({
+      x: overlayOrigin.x + Number(r.x || 0),
+      y: overlayOrigin.y + Number(r.y || 0),
+      width: Number(r.width || 0),
+      height: Number(r.height || 0)
+    }));
+  } else if (session.start && session.lastPos) {
+    session.highlights = selectionLikeRects(session.start, session.lastPos);
   }
 }
 
-function makeRect(a, b) {
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return {
-    x,
-    y,
-    width: Math.abs(a.x - b.x),
-    height: Math.abs(a.y - b.y)
-  };
+function applyPointer(type, dip) {
+  if (!session || !session.active || !dip) return;
+  session.lastPos = dip;
+  if (type === 'down') {
+    session.dragging = true;
+    session.start = { x: dip.x, y: dip.y };
+    session.highlights = [];
+  } else if (type === 'up') {
+    session.dragging = false;
+  }
+  if (session.start && session.lastPos) {
+    session.highlights = selectionLikeRects(session.start, session.lastPos);
+  }
 }
 
-function toClientRect(screenRect) {
-  if (!screenRect) return null;
-  return {
-    x: screenRect.x - overlayOrigin.x,
-    y: screenRect.y - overlayOrigin.y,
-    width: screenRect.width,
-    height: screenRect.height
-  };
+function selectionLikeRects(a, b) {
+  const H = 22;
+  let x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y;
+  if (y2 < y1 - 2) {
+    const tx = x1; x1 = x2; x2 = tx;
+    const ty = y1; y1 = y2; y2 = ty;
+  }
+  if (Math.abs(y2 - y1) < H * 0.65) {
+    const x = Math.min(x1, x2);
+    return [{ x, y: y1 - H / 2, width: Math.max(8, Math.abs(x2 - x1)), height: H }];
+  }
+  const virt = capture.virtualBounds();
+  const left = virt.x + 24;
+  const right = virt.x + virt.width - 24;
+  const rects = [];
+  rects.push({ x: x1, y: y1 - H / 2, width: Math.max(8, right - x1), height: H });
+  let y = y1 + H;
+  while (y + H / 2 < y2 - H * 0.4) {
+    rects.push({ x: left, y: y - H / 2, width: Math.max(8, right - left), height: H });
+    y += H;
+  }
+  rects.push({ x: left, y: y2 - H / 2, width: Math.max(8, x2 - left), height: H });
+  return rects;
+}
+
+function unionRect(rects) {
+  if (!rects || !rects.length) return null;
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  for (const r of rects) {
+    if (!r) continue;
+    x1 = Math.min(x1, r.x);
+    y1 = Math.min(y1, r.y);
+    x2 = Math.max(x2, r.x + r.width);
+    y2 = Math.max(y2, r.y + r.height);
+  }
+  if (!Number.isFinite(x1)) return null;
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
+}
+
+function toClientHighlights(rects) {
+  return (rects || []).map((r) => ({
+    x: r.x - overlayOrigin.x,
+    y: r.y - overlayOrigin.y,
+    width: r.width,
+    height: r.height
+  }));
 }
 
 function relayoutOverlay() {
@@ -200,7 +262,7 @@ function relayoutOverlay() {
 
 function tipHtml() {
   const label = modifierSpec().label;
-  return `<span class="accent">拖动</span>框选要翻译的区域 · 松开 <span class="accent">${label}</span> 翻译 · <span class="accent">Esc</span> 取消`;
+  return `<span class="accent">拖动</span>拉取要翻译的字句 · 松开 <span class="accent">${label}</span> 翻译 · <span class="accent">Esc</span> 取消`;
 }
 
 function pushOverlay() {
@@ -208,7 +270,7 @@ function pushOverlay() {
   overlayWin.webContents.send('pick:state', {
     color: borderColor(),
     tip: tipHtml(),
-    rect: toClientRect(session && session.rect)
+    highlights: toClientHighlights(session && session.highlights)
   });
 }
 
@@ -228,7 +290,7 @@ function ensureOverlay() {
     skipTaskbar: true,
     resizable: false,
     movable: false,
-    focusable: false,
+    focusable: true,
     hasShadow: false,
     show: false,
     fullscreen: false,
@@ -250,7 +312,7 @@ function ensureOverlay() {
     overlayReady = true;
     winHost.applyNoActivate(overlayWin);
     pushOverlay();
-    log.info('[pick] 遮罩窗口已预创建 showInactive focusable=false 不穿透');
+    log.info('[pick] 遮罩窗口已预创建 showInactive 可命中鼠标 不穿透');
   });
   overlayWin.on('closed', () => {
     overlayWin = null;
@@ -276,12 +338,29 @@ function hideOverlay() {
 
 function startDrawLoop() {
   if (drawTimer) return;
+  lastPollLbutton = false;
   drawTimer = setInterval(() => {
-    if (!session || !session.active || !session.dragging || !session.start) return;
+    if (!session || !session.active) return;
     const pos = screen.getCursorScreenPoint();
-    session.lastPos = pos;
-    session.rect = makeRect(session.start, pos);
-    pushOverlay();
+    const keys = winHost.getKeys();
+    const lbutton = !!keys.lbutton;
+
+    if (lbutton && !lastPollLbutton && !session.dragging) {
+      session.dragging = true;
+      session.start = { x: pos.x, y: pos.y };
+      session.highlights = [];
+    }
+    if (session.dragging && session.start) {
+      session.lastPos = pos;
+      session.highlights = selectionLikeRects(session.start, pos);
+      pushOverlay();
+    }
+    if (!lbutton && lastPollLbutton && session.dragging) {
+      session.dragging = false;
+      if (session.start) session.highlights = selectionLikeRects(session.start, pos);
+      pushOverlay();
+    }
+    lastPollLbutton = lbutton;
   }, 16);
 }
 
@@ -301,13 +380,19 @@ function enterCapture(reason) {
   showOverlay();
   startDrawLoop();
   log.info('[pick] 进入取词模式 reason=', reason,
-    'hook_swallow=true SendInput=not-used clipboard=untouched noactivate=true');
+    'hook_move_pass=true swipe_text=true SendInput=not-used clipboard=untouched noactivate=true');
 }
 
-function isValidRect(rect) {
-  if (!rect) return false;
-  const min = minSize();
-  return rect.width >= min && rect.height >= min;
+function isValidSwipe(start, end, highlights) {
+  if (!start || !end) return false;
+  const dist = Math.hypot(end.x - start.x, end.y - start.y);
+  if (dist >= minSize()) return true;
+  return !!(highlights && highlights.some((r) => r && r.width >= minSize()));
+}
+
+function dipPointToPhysical(pt) {
+  const p = screen.dipToScreenPoint({ x: pt.x, y: pt.y });
+  return { x: Math.round(p.x), y: Math.round(p.y) };
 }
 
 function cancelCapture(reason) {
@@ -319,42 +404,51 @@ function cancelCapture(reason) {
 
 async function finishCapture(reason) {
   if (!session || !session.active) return;
-  const rect = session.rect;
+  const start = session.start;
+  const end = session.lastPos || session.start;
+  const highlights = (session.highlights || []).slice();
   session.active = false;
   stopDrawLoop();
   hideOverlay();
   session = null;
-  if (!isValidRect(rect)) {
-    log.info('[pick] 选区无效，不翻译', JSON.stringify(rect), 'reason=', reason);
+  if (!isValidSwipe(start, end, highlights)) {
+    log.info('[pick] 划词无效，不翻译', JSON.stringify({ start, end }), 'reason=', reason);
     return;
   }
-  log.info('[pick] 取词结束 reason=', reason, 'DIP', JSON.stringify(rect));
+  log.info('[pick] 划词结束 reason=', reason, 'start', JSON.stringify(start), 'end', JSON.stringify(end));
   setTimeout(() => {
-    doPickTranslate(rect).catch((e) => log.error('[pick] 翻译异常:', e.message));
+    doPickTranslate(start, end, highlights).catch((e) => log.error('[pick] 翻译异常:', e.message));
   }, 60);
 }
 
-async function pickText(rect) {
-  const physical = dipRectToPhysical(rect);
+async function pickText(start, end, highlights) {
+  const p1 = dipPointToPhysical(start);
+  const p2 = dipPointToPhysical(end);
   const unit = mapUnit(cfg().hoverGranularity);
   const preferUia = cfg().pickPreferUia !== false;
-  dbg('取词 DIP', JSON.stringify(rect), 'physical', JSON.stringify(physical), 'unit', unit);
+  dbg('划词 DIP', JSON.stringify({ start, end }), 'physical', JSON.stringify({ p1, p2 }), 'unit', unit);
 
   if (preferUia) {
     try {
-      const uia = await winHost.uiaRect(physical.x, physical.y, physical.width, physical.height, unit);
+      const uia = await winHost.uiaRange(p1.x, p1.y, p2.x, p2.y, unit);
       const text = String(uia && uia.text || '').trim();
       if (text) {
-        log.info('[pick] UIA 命中 source=', uia.source, 'len=', text.length,
+        log.info('[pick] UIA 划词命中 source=', uia.source, 'len=', text.length,
           'selection_unchanged=true (Select 未调用)');
-        return { text, pickSource: uia.source || 'uia-rect' };
+        return { text, pickSource: uia.source || 'uia-range', bounds: uia.rects || highlights };
       }
       dbg('UIA 无文本 source=', uia && uia.source);
     } catch (e) {
-      log.warn('[pick] UIA 框选失败，转 OCR:', e.message);
+      log.warn('[pick] UIA 划词失败，转 OCR:', e.message);
     }
   }
 
+  const rect = unionRect(highlights) || {
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y) - 12,
+    width: Math.max(8, Math.abs(end.x - start.x)),
+    height: Math.max(minSize(), Math.abs(end.y - start.y) + 24)
+  };
   const region = await capture.captureRegion(
     Math.round(rect.x), Math.round(rect.y),
     Math.round(rect.width), Math.round(rect.height)
@@ -373,20 +467,21 @@ async function pickText(rect) {
   return { text, pickSource: 'ocr:' + (result.engine || 'unknown') };
 }
 
-async function doPickTranslate(rect) {
+async function doPickTranslate(start, end, highlights) {
   if (busy) return;
   busy = true;
   const token = pipeline.nextToken();
   lastAbort = new AbortController();
-  const cx = rect.x + rect.width / 2;
-  const cy = rect.y + rect.height + 8;
+  const union = unionRect(highlights);
+  const cx = end ? end.x : (union ? union.x + union.width / 2 : start.x);
+  const cy = union ? union.y + union.height + 8 : (end ? end.y + 16 : start.y + 16);
   try {
     resultWin.showLoading(cx, cy, '识别翻译中...');
-    const picked = await pickText(rect);
+    const picked = await pickText(start, end, highlights);
     if (!pipeline.isCurrent(token)) return;
     const text = String(picked.text || '').trim();
     if (!text) {
-      const msg = picked.error ? picked.error : (picked.pickSource === 'ocr-fail' ? 'OCR 识别失败' : '选区内未识别到文字');
+      const msg = picked.error ? picked.error : (picked.pickSource === 'ocr-fail' ? 'OCR 识别失败' : '未拉取到文字');
       resultWin.showAt(cx, cy, { error: true, msg, source: 'pick', pickSource: picked.pickSource });
       return;
     }
@@ -465,16 +560,16 @@ function startFallbackPoll() {
       if (keys.lbutton && !lastFallback.lbutton) {
         session.dragging = true;
         session.start = { x: pos.x, y: pos.y };
-        session.rect = { x: pos.x, y: pos.y, width: 0, height: 0 };
+        session.highlights = [];
         pushOverlay();
       }
       if (!keys.lbutton && lastFallback.lbutton && session.dragging) {
         session.dragging = false;
-        if (session.start) session.rect = makeRect(session.start, pos);
+        if (session.start) session.highlights = selectionLikeRects(session.start, pos);
         pushOverlay();
       }
       if (session.dragging && session.start) {
-        session.rect = makeRect(session.start, pos);
+        session.highlights = selectionLikeRects(session.start, pos);
         pushOverlay();
       }
     }
@@ -518,7 +613,7 @@ async function start() {
   enabled = true;
   ensureOverlay();
   await startGuardSafe();
-  log.info('[pick] 已启用全局拖动取词 modifier=', cfg().hoverModifier || 'alt',
+  log.info('[pick] 已启用全局划词取词 modifier=', cfg().hoverModifier || 'alt',
     'preferUia=', cfg().pickPreferUia !== false, 'clipboard_untouched=true');
 }
 
@@ -568,17 +663,37 @@ function applyConfig() {
 
 async function translateAtCursor() {
   const pos = screen.getCursorScreenPoint();
-  const W = 260, H = 72;
-  const rect = {
-    x: Math.round(pos.x - W / 2),
-    y: Math.round(pos.y - H / 2),
-    width: W,
-    height: H
-  };
-  await doPickTranslate(rect);
+  const start = { x: pos.x - 40, y: pos.y };
+  const end = { x: pos.x + 40, y: pos.y };
+  await doPickTranslate(start, end, selectionLikeRects(start, end));
+}
+
+function debugWaitOverlayReady(timeoutMs = 5000) {
+  ensureOverlay();
+  if (overlayReady && overlayWin && !overlayWin.isDestroyed()) {
+    return Promise.resolve(overlayWin);
+  }
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('overlay ready timeout')), timeoutMs);
+    const check = () => {
+      if (overlayReady && overlayWin && !overlayWin.isDestroyed()) {
+        clearTimeout(t);
+        resolve(overlayWin);
+      }
+    };
+    const timer = setInterval(() => {
+      check();
+      if (overlayReady) clearInterval(timer);
+    }, 50);
+  });
 }
 
 module.exports = {
   start, stop, setDelay, setMasterEnabled, translateAtCursor, applyConfig,
-  isRunning: () => enabled
+  isRunning: () => enabled,
+  debugEnter: () => enterCapture('self-test'),
+  debugCancel: () => cancelCapture('self-test'),
+  debugGetOverlay: () => overlayWin,
+  debugGetSession: () => session ? { active: session.active, dragging: session.dragging, highlights: session.highlights } : null,
+  debugWaitOverlayReady
 };
