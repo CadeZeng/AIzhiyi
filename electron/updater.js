@@ -1,8 +1,7 @@
 // ============================================================
 // AI智译 · 自动更新
-// 不走 github.com/releases.atom（私有仓库会 404 并返回整页 HTML）。
-// 改用 GitHub REST API。没有可访问的 Release 时视为当前已是最新。
-// 用户需在关于页点击「立即更新」才会下载，下载完成后点「立即重启安装」。
+// GitHub 直连在国内常被重置（net::ERR_CONNECTION_RESET）。
+// 先探测可用镜像，再用 generic provider 下载 latest.yml / 安装包。
 // ============================================================
 
 const { app, shell } = require('electron');
@@ -13,11 +12,20 @@ const GH_OWNER = 'CadeZeng';
 const GH_REPO = 'AIzhiyi';
 const GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}`;
 const GH_RELEASES = `https://github.com/${GH_OWNER}/${GH_REPO}/releases`;
+const GH_LATEST_DOWNLOAD = `https://github.com/${GH_OWNER}/${GH_REPO}/releases/latest/download`;
+
+const FEED_MIRRORS = [
+  `https://ghproxy.net/https://github.com/${GH_OWNER}/${GH_REPO}/releases/latest/download`,
+  `https://ghfast.top/https://github.com/${GH_OWNER}/${GH_REPO}/releases/latest/download`,
+  `https://gh-proxy.com/https://github.com/${GH_OWNER}/${GH_REPO}/releases/latest/download`,
+  GH_LATEST_DOWNLOAD
+];
 
 let mainWindow = null;
 let silentCheck = false;
 let checking = false;
 let lastCheckResult = null;
+let activeFeedBase = '';
 
 const state = {
   status: 'idle', // idle | checking | available | downloading | downloaded | up-to-date | error
@@ -25,7 +33,8 @@ const state = {
   current: null,
   percent: 0,
   message: '',
-  htmlUrl: GH_RELEASES
+  htmlUrl: GH_RELEASES,
+  setupUrl: ''
 };
 
 function ghHeaders() {
@@ -42,12 +51,26 @@ function getState() {
   return {
     ...state,
     current: app.getVersion(),
-    packaged: app.isPackaged
+    packaged: app.isPackaged,
+    feed: activeFeedBase
   };
 }
 
 function setState(patch) {
   Object.assign(state, patch);
+}
+
+function withSlash(url) {
+  return String(url || '').replace(/\/?$/, '/');
+}
+
+function applyFeed(base) {
+  activeFeedBase = withSlash(base);
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: activeFeedBase
+  });
+  log.info('[updater] feed =', activeFeedBase);
 }
 
 function init(win) {
@@ -57,7 +80,8 @@ function init(win) {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.autoRunAppAfterInstall = true;
-  autoUpdater.requestHeaders = Object.assign({ 'User-Agent': 'AI-Translator-Updater' }, ghHeaders());
+  autoUpdater.requestHeaders = { 'User-Agent': 'AI-Translator-Updater' };
+  applyFeed(FEED_MIRRORS[0]);
 
   autoUpdater.on('checking-for-update', () => {
     if (!silentCheck) send('checking');
@@ -104,7 +128,7 @@ function init(win) {
     const message = sanitizeUpdateError(e);
     log.error('[updater] error:', message);
     if (isNoPublishedVersions(e)) {
-      setState({ status: 'up-to-date', message: noReleaseMessage() });
+      setState({ status: 'error', message: noReleaseMessage() });
       if (!silentCheck) send('error', { message: noReleaseMessage() });
       return;
     }
@@ -131,7 +155,11 @@ function isNoPublishedVersions(err) {
 }
 
 function noReleaseMessage() {
-  return 'GitHub 上还没有发布过版本，所以现在无法在线更新。请先运行 npm run dist:gh，把安装包发到 CadeZeng/AIzhiyi 的 Release。';
+  return 'GitHub 上还没有发布过版本，所以现在无法在线更新。';
+}
+
+function networkMessage() {
+  return '无法直连 GitHub 下载更新（连接被重置）。已切换镜像重试；若仍失败，请点击「立即更新」打开镜像下载页手动安装。';
 }
 
 function sanitizeUpdateError(err) {
@@ -140,10 +168,10 @@ function sanitizeUpdateError(err) {
     return noReleaseMessage();
   }
   if (looksLikeHtmlDump(raw) || /releases\.atom/i.test(raw) || /HttpError:\s*404/i.test(raw)) {
-    return '暂时无法从 GitHub 读取更新清单，已保持当前版本。';
+    return '暂时无法读取更新清单，已保持当前版本。';
   }
-  if (/ENOTFOUND|ECONNRESET|ETIMEDOUT|net::ERR|offline|getaddrinfo/i.test(raw)) {
-    return '网络无法连接到 GitHub，请检查网络或代理后重试。';
+  if (/ENOTFOUND|ECONNRESET|ETIMEDOUT|net::ERR|offline|getaddrinfo|aborted|AbortError/i.test(raw)) {
+    return networkMessage();
   }
   const stripped = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   if (stripped.length > 160) return stripped.slice(0, 160) + '…';
@@ -171,25 +199,84 @@ function isNewer(remote, local) {
   }
 }
 
-async function fetchLatestRelease() {
-  const headers = ghHeaders();
-  let res;
+async function fetchWithTimeout(url, opts = {}, ms = 12000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
   try {
-    res = await fetch(GH_API + '/releases/latest', { headers });
+    return await fetch(url, Object.assign({}, opts, { signal: ctrl.signal, redirect: 'follow' }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function parseLatestYml(text) {
+  const raw = String(text || '');
+  const version = (raw.match(/^version:\s*['"]?([^\s'"]+)/m) || [])[1] || '';
+  const pathName = (raw.match(/^path:\s*['"]?([^\s'"]+)/m) || [])[1]
+    || (raw.match(/url:\s*['"]?([^\s'"]+\.exe)/m) || [])[1]
+    || '';
+  return {
+    version: String(version).replace(/^v/i, ''),
+    fileName: pathName,
+    hasYml: /^version:\s*/m.test(raw)
+  };
+}
+
+function setupUrlFor(fileName, feedBase) {
+  const name = fileName || `ai-translator-setup-${state.version || app.getVersion()}.exe`;
+  if (feedBase) return withSlash(feedBase) + name;
+  return withSlash(FEED_MIRRORS[0]) + name;
+}
+
+async function probeFeed() {
+  for (const base of FEED_MIRRORS) {
+    const ymlUrl = withSlash(base) + 'latest.yml';
+    try {
+      const res = await fetchWithTimeout(ymlUrl, {
+        headers: { 'User-Agent': 'AI-Translator-Updater' }
+      }, 10000);
+      if (!res.ok) {
+        log.warn('[updater] probe', ymlUrl, 'status', res.status);
+        continue;
+      }
+      const text = await res.text();
+      const parsed = parseLatestYml(text);
+      if (!parsed.hasYml || !parsed.version) {
+        log.warn('[updater] probe', ymlUrl, 'invalid yml');
+        continue;
+      }
+      log.info('[updater] probe ok', ymlUrl, 'version', parsed.version);
+      return { base: withSlash(base), ...parsed, htmlUrl: GH_RELEASES };
+    } catch (e) {
+      log.warn('[updater] probe fail', ymlUrl, e.message);
+    }
+  }
+  return null;
+}
+
+async function fetchLatestFromApi() {
+  try {
+    const res = await fetchWithTimeout(GH_API + '/releases/latest', { headers: ghHeaders() }, 10000);
+    if (res.status === 404) return { ok: false, reason: 'unavailable' };
+    if (!res.ok) return { ok: false, reason: 'github-http', status: res.status };
+    const latest = await res.json().catch(() => null);
+    if (!latest) return { ok: false, reason: 'parse' };
+    const tag = String(latest.tag_name || latest.name || '').replace(/^v/i, '');
+    const setupAsset = Array.isArray(latest.assets)
+      ? latest.assets.find((a) => /\.exe$/i.test(a.name || '') && !/blockmap/i.test(a.name || ''))
+      : null;
+    const hasYml = Array.isArray(latest.assets) && latest.assets.some((a) => /latest\.yml$/i.test(a.name || ''));
+    return {
+      ok: true,
+      version: tag,
+      hasYml,
+      fileName: setupAsset && setupAsset.name,
+      htmlUrl: latest.html_url || GH_RELEASES
+    };
   } catch (e) {
+    log.warn('[updater] api fail', e.message);
     return { ok: false, reason: 'network', message: sanitizeUpdateError(e) };
   }
-  if (res.status === 404) {
-    return { ok: false, reason: 'unavailable', message: noReleaseMessage() };
-  }
-  if (!res.ok) {
-    return { ok: false, reason: 'github-http', message: `GitHub 返回 ${res.status}，暂时无法检查更新。` };
-  }
-  const latest = await res.json().catch(() => null);
-  if (!latest) return { ok: false, reason: 'parse', message: '当前已是最新版本。' };
-  const tag = String(latest.tag_name || latest.name || '').replace(/^v/i, '');
-  const hasYml = Array.isArray(latest.assets) && latest.assets.some((a) => /latest\.yml$/i.test(a.name || ''));
-  return { ok: true, tag, version: tag, hasYml, htmlUrl: latest.html_url || GH_RELEASES };
 }
 
 function availablePayload(version, extra = {}) {
@@ -199,6 +286,7 @@ function availablePayload(version, extra = {}) {
     status: extra.status || 'available',
     version: ver,
     htmlUrl: extra.htmlUrl || state.htmlUrl,
+    setupUrl: extra.setupUrl || state.setupUrl,
     message
   });
   return {
@@ -206,6 +294,7 @@ function availablePayload(version, extra = {}) {
     reason: extra.reason || 'available',
     version: ver,
     htmlUrl: state.htmlUrl,
+    setupUrl: state.setupUrl,
     packaged: app.isPackaged,
     message
   };
@@ -235,79 +324,87 @@ async function checkNow(opts = {}) {
       send('checking');
     }
     const current = app.getVersion();
-    const remote = await fetchLatestRelease();
+    const api = await fetchLatestFromApi();
+    const feed = await probeFeed();
 
-    if (!remote.ok) {
-      const message = remote.reason === 'unavailable' ? noReleaseMessage() : (remote.message || '当前已是最新版本。');
-      log.info('[updater] 远程无可用 Release（', remote.reason, '）');
-      setState({ status: remote.reason === 'unavailable' ? 'error' : 'up-to-date', message });
-      if (!silent) {
-        if (remote.reason === 'unavailable') send('error', { message });
-        else send('up-to-date');
-      }
-      return {
-        ok: remote.reason !== 'unavailable',
-        reason: remote.reason === 'unavailable' ? 'no-release' : 'up-to-date',
-        message
-      };
+    if (!feed && !(api && api.ok)) {
+      const message = networkMessage();
+      setState({ status: 'error', message });
+      if (!silent) send('error', { message });
+      return { ok: false, reason: 'network', message };
     }
 
-    setState({ htmlUrl: remote.htmlUrl || GH_RELEASES, version: remote.version });
+    if (api && api.reason === 'unavailable' && !feed) {
+      const message = noReleaseMessage();
+      setState({ status: 'error', message });
+      if (!silent) send('error', { message });
+      return { ok: false, reason: 'no-release', message };
+    }
 
-    if (!isNewer(remote.version, current)) {
-      log.info('[updater] 已是最新 current=', current, 'remote=', remote.version);
+    const version = (feed && feed.version) || (api && api.version);
+    const fileName = (feed && feed.fileName) || (api && api.fileName);
+    const htmlUrl = (api && api.htmlUrl) || GH_RELEASES;
+    const feedBase = feed ? feed.base : FEED_MIRRORS[0];
+    applyFeed(feedBase);
+    setState({
+      version,
+      htmlUrl,
+      setupUrl: setupUrlFor(fileName, feedBase)
+    });
+
+    if (!version || !isNewer(version, current)) {
+      log.info('[updater] 已是最新 current=', current, 'remote=', version);
       setState({ status: 'up-to-date', message: '当前已是最新版本。' });
       if (!silent) send('up-to-date');
       return { ok: true, reason: 'up-to-date', message: '当前已是最新版本。' };
     }
 
     if (!app.isPackaged) {
-      const message = `发现新版本 v${remote.version}。开发运行无法自动安装，点击「立即更新」将打开下载页。`;
-      log.info('[updater]', message);
-      const payload = availablePayload(remote.version, { htmlUrl: remote.htmlUrl, message, reason: 'available-dev' });
-      send('update-available', { version: remote.version, dev: true });
+      const message = `发现新版本 v${version}。开发运行无法自动安装，点击「立即更新」将打开镜像下载页。`;
+      const payload = availablePayload(version, { htmlUrl, setupUrl: state.setupUrl, message, reason: 'available-dev' });
+      send('update-available', { version, dev: true });
       return payload;
     }
 
-    if (!remote.hasYml) {
-      const message = `发现新版本 v${remote.version}，但 Release 缺少 latest.yml，无法自动安装。点击「立即更新」将打开下载页。`;
-      const payload = availablePayload(remote.version, {
-        htmlUrl: remote.htmlUrl,
-        message,
-        reason: 'no-yml',
-        status: 'available'
-      });
-      send('update-available', { version: remote.version, manual: true });
-      return payload;
-    }
-
-    try {
-      lastCheckResult = await autoUpdater.checkForUpdates();
-    } catch (e) {
-      if (isNoPublishedVersions(e)) {
-        const message = noReleaseMessage();
-        setState({ status: 'error', message });
-        send('error', { message });
-        return { ok: false, reason: 'no-release', message };
+    if (feed) {
+      try {
+        lastCheckResult = await autoUpdater.checkForUpdates();
+      } catch (e) {
+        log.warn('[updater] checkForUpdates failed, fallback to manual:', e.message);
+        lastCheckResult = null;
       }
-      throw e;
+    } else {
+      lastCheckResult = null;
     }
-    if (!lastCheckResult) {
-      const message = `发现新版本 v${remote.version}，点击「立即更新」将打开下载页。`;
-      const payload = availablePayload(remote.version, { htmlUrl: remote.htmlUrl, message, reason: 'inactive' });
-      send('update-available', { version: remote.version, manual: true });
-      return payload;
-    }
-    return availablePayload(remote.version, { htmlUrl: remote.htmlUrl });
+
+    const payload = availablePayload(version, {
+      htmlUrl,
+      setupUrl: state.setupUrl,
+      message: `发现新版本 v${version}，点击「立即更新」开始下载。`
+    });
+    send('update-available', { version });
+    return payload;
   } catch (e) {
+    const message = sanitizeUpdateError(e);
     log.error('[updater] 检查更新失败:', e);
-    log.info('[updater] 回退为已是最新，避免把 GitHub HTML 错误展示给用户');
-    setState({ status: 'up-to-date', message: '当前已是最新版本。' });
-    if (!silent) send('up-to-date');
-    return { ok: true, reason: 'up-to-date', message: '当前已是最新版本。' };
+    setState({ status: 'error', message });
+    if (!silent) send('error', { message });
+    return { ok: false, reason: 'error', message };
   } finally {
     silentCheck = false;
     checking = false;
+  }
+}
+
+async function openSetup() {
+  const url = state.setupUrl || setupUrlFor(null, activeFeedBase || FEED_MIRRORS[0]);
+  try {
+    await shell.openExternal(url);
+    return url;
+  } catch (e) {
+    log.error('[updater] 打开下载页失败:', e);
+    try { await shell.openExternal(GH_RELEASES); } catch (_) {}
+    return url;
   }
 }
 
@@ -329,15 +426,11 @@ async function downloadNow() {
     }
   }
 
-  const canAutoInstall = app.isPackaged && lastCheckResult;
-  if (!canAutoInstall) {
-    const url = state.htmlUrl || GH_RELEASES;
-    try { await shell.openExternal(url); } catch (e) {
-      log.error('[updater] 打开下载页失败:', e);
-    }
+  if (!app.isPackaged || !lastCheckResult) {
+    const url = await openSetup();
     const message = app.isPackaged
-      ? `无法自动安装，已打开下载页：${url}`
-      : `开发运行无法自动安装，已打开下载页：${url}`;
+      ? `无法自动下载，已打开镜像安装包：${url}`
+      : `开发运行无法自动安装，已打开镜像下载页：${url}`;
     send('error', { message });
     return { ok: false, reason: 'open-release', message, htmlUrl: url };
   }
@@ -350,11 +443,14 @@ async function downloadNow() {
       ok: true,
       reason: 'downloaded',
       version: state.version,
-      message: `新版本 v${state.version || ''} 已下载完成，点击「立即重启安装」。`
+      message: state.version
+        ? `新版本 v${state.version} 已下载完成，点击「立即重启安装」。`
+        : '新版本已下载完成，点击「立即重启安装」。'
     };
   } catch (e) {
-    const message = sanitizeUpdateError(e);
-    log.error('[updater] 下载更新失败:', message);
+    log.error('[updater] 下载更新失败:', e);
+    const url = await openSetup();
+    const message = `自动下载失败，已打开镜像安装包：${url}`;
     setState({ status: 'available', message });
     send('error', { message });
     return { ok: false, reason: 'download-failed', message };

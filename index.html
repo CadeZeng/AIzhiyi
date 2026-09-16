@@ -1486,7 +1486,7 @@ button:focus-visible{outline-offset:2px}
           <path d="M5 8h14M5 8l3 3M19 8l-3 3M9 16h6M12 13v6"/>
         </svg>
       </div>
-      <div class="titlebar-title">AI智译<span class="version" id="titlebarVersion">v1.0.1</span></div>
+      <div class="titlebar-title">AI智译<span class="version" id="titlebarVersion">v1.0.2</span></div>
     </div>
     <div class="titlebar-right">
       <button class="win-btn" title="最小化" id="winMin">
@@ -2267,7 +2267,7 @@ button:focus-visible{outline-offset:2px}
               <div class="about-tagline">Vibe Coding 辅助翻译与提示词优化工具。基于 Electron 构建，集成多模型 AI 能力。</div>
               <div class="about-version-badge">
                 <span class="dot"></span>
-                <span id="aboutVersionTag">v1.0.1</span>
+                <span id="aboutVersionTag">v1.0.2</span>
               </div>
             </div>
 
@@ -2282,7 +2282,7 @@ button:focus-visible{outline-offset:2px}
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">应用版本</span>
-                  <span class="about-info-value" id="aboutAppVersion">1.0.1</span>
+                  <span class="about-info-value" id="aboutAppVersion">1.0.2</span>
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">Electron</span>
@@ -2310,7 +2310,7 @@ button:focus-visible{outline-offset:2px}
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">更新通道</span>
-                  <span class="about-info-value">GitHub Release</span>
+                  <span class="about-info-value">GitHub Release（国内镜像）</span>
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">仓库地址</span>
@@ -3874,7 +3874,7 @@ if(screenshotTestBtn){
 // ============ 数据导出/导入 ============
 async function exportData(){
   try{
-    let appVersion = "1.0.1";
+    let appVersion = "1.0.2";
     try{
       if(window.electronAPI?.getAppVersion){
         appVersion = await window.electronAPI.getAppVersion();
