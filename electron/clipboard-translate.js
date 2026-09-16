@@ -36,18 +36,39 @@ async function trigger() {
     resultWin.showLoading(pos.x, pos.y, '剪贴板翻译中...');
     log.info('[clipboard-translate] 文本长度:', text.length);
 
-    // 复用主进程翻译服务（内部自动检测语言方向：中文→English，英文→简体中文）
-    const translation = await ai.translateText(text, '简体中文', 'auto');
-    const t = (translation || '').trim();
+    const targetLang = ai.getConfig().targetLang || '简体中文';
+    const pipeline = require('./translate-pipeline');
+    const result = await pipeline.translateSmart(text, { targetLang });
+    if (result.cancelled) return;
+    if (result.skipped) {
+      resultWin.showAt(pos.x, pos.y, {
+        original: text,
+        translation: '',
+        hint: result.hint || '已跳过翻译',
+        detected: result.detected,
+        targetLang: result.targetLang,
+        kind: result.kind,
+        kindLabel: result.kindLabel,
+        source: 'clipboard'
+      });
+      return;
+    }
+    const t = (result.translation || '').trim();
     if (!t) {
       resultWin.showAt(pos.x, pos.y, { error: true, msg: '翻译返回为空，请重试' });
       return;
     }
-    if (t === text) {
-      resultWin.showAt(pos.x, pos.y, { error: true, msg: '译文与原文相同，请检查语言设置' });
-      return;
-    }
-    resultWin.showAt(pos.x, pos.y, { original: text, translation: t, source: 'clipboard' });
+    resultWin.showAt(pos.x, pos.y, {
+      original: text,
+      translation: t,
+      phonetic: result.phonetic,
+      definitions: result.definitions,
+      detected: result.detected,
+      targetLang: result.targetLang,
+      kind: result.kind,
+      kindLabel: result.kindLabel,
+      source: 'clipboard'
+    });
   } catch (e) {
     const pos = screen.getCursorScreenPoint();
     log.error('[clipboard-translate] 失败:', e.message);

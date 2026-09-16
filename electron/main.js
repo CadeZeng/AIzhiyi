@@ -17,8 +17,27 @@ const screenshotTranslate = require('./screenshot-translate');
 const resultWindow = require('./result-window');
 const clipboardTranslate = require('./clipboard-translate');
 const ball = require('./ball-window');
+const winHost = require('./win-host');
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.aizhiyi.translator');
+}
 
 let mainWindow = null;
+
+function resolveIconImage(fileName) {
+  const candidates = [
+    path.join(__dirname, '..', 'build', fileName),
+    path.join(process.resourcesPath || '', fileName)
+  ];
+  for (const iconPath of candidates) {
+    try {
+      const image = nativeImage.createFromPath(iconPath);
+      if (image && !image.isEmpty()) return image;
+    } catch (_) {}
+  }
+  return null;
+}
 
 // 单实例锁
 const gotTheLock = app.requestSingleInstanceLock();
@@ -35,13 +54,7 @@ if (!gotTheLock) {
 }
 
 function createWindow() {
-  // 窗口图标
-  let icon = null;
-  const iconPath = path.join(__dirname, '..', 'build', 'icon.ico');
-  try {
-    icon = nativeImage.createFromPath(iconPath);
-    if (icon.isEmpty()) icon = null;
-  } catch (_) {}
+  const icon = resolveIconImage('icon.ico') || resolveIconImage('icon.png');
 
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -107,7 +120,9 @@ function createWindow() {
 
   // 自动更新
   ipcMain.handle('updater:check', () => updater.checkNow());
+  ipcMain.handle('updater:download', () => updater.downloadNow());
   ipcMain.handle('updater:install', () => updater.quitAndInstall());
+  ipcMain.handle('updater:get-state', () => updater.getState());
 
   // 日志
   ipcMain.handle('logs:open-folder', () => {
@@ -129,7 +144,7 @@ function createWindow() {
 
   // 悬停取词开关
   ipcMain.handle('hover:set-enabled', (_, enabled) => {
-    if (enabled) hoverTranslate.start();
+    if (enabled && ball.getEnabled()) hoverTranslate.start();
     else hoverTranslate.stop();
     return true;
   });
@@ -157,7 +172,10 @@ function createWindow() {
     }
   });
   ipcMain.on('result:close', () => {
-    resultWindow.hide();
+    resultWindow.hide('force');
+  });
+  ipcMain.on('result:pin-toggle', () => {
+    resultWindow.setPinned(!resultWindow.isPinned());
   });
 
   // 监听最大化状态变化
@@ -190,19 +208,27 @@ function createWindow() {
   // 点击小球 → 切换所有翻译触发（应用内取词 + 应用外快捷键）
   ball.create(mainWindow, (ballEnabled) => {
     shortcuts.setTranslateShortcutsEnabled(ballEnabled);
+    hoverTranslate.setMasterEnabled(ballEnabled);
+    if (!ballEnabled) hoverTranslate.stop();
   });
   ipcMain.handle('ball:get-state', () => ball.getEnabled());
   // 启动时若小球为关闭状态，立即注销翻译类快捷键
-  if (!ball.getEnabled()) shortcuts.setTranslateShortcutsEnabled(false);
+  if (!ball.getEnabled()) {
+    shortcuts.setTranslateShortcutsEnabled(false);
+    hoverTranslate.setMasterEnabled(false);
+  }
+
+  // 预热 Windows UIA / OCR 助手（失败不影响主窗口）
+  winHost.ensure().catch((e) => log.warn('[main] win-host 预热失败:', e.message));
 
   // 从 secureStore 加载 API Key 到 ai-call 缓存
   ai.loadKeysAsync();
 
   // 初始化自动更新
   updater.init(mainWindow);
-  // 启动后 5 秒检查更新（避免阻塞启动）
+  // 启动后 5 秒静默检查（失败只写日志，不在关于页刷 HTML 错误）
   setTimeout(() => {
-    try { updater.checkNow(); } catch (e) { log.error('检查更新失败:', e); }
+    updater.checkNow({ silent: true }).catch((e) => log.error('检查更新失败:', e));
   }, 5000);
 
   return mainWindow;
@@ -229,6 +255,9 @@ app.on('will-quit', () => {
   shortcuts.unregisterAll();
   tray.destroy();
   resultWindow.destroy();
+  screenshotTranslate.destroy();
+  hoverTranslate.stop();
+  winHost.stop();
   ball.destroy();
 });
 

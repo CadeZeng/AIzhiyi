@@ -1,7 +1,7 @@
 {
   "name": "ai-translator",
   "productName": "AI智译",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Vibe Coding 辅助翻译与提示词 - Windows 桌面应用",
   "author": "AI智译",
   "license": "MIT",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "gen:icon": "node generate-icon.js",
+    "gen:icon": "powershell -ExecutionPolicy Bypass -File generate-icon.ps1",
     "build:win": "electron-builder --win --x64 --publish never",
     "build:portable": "electron-builder --win portable --x64 --publish never",
     "build:nsis": "electron-builder --win nsis --x64 --publish never",
@@ -26,6 +26,7 @@
     "appId": "com.aizhiyi.translator",
     "productName": "AI智译",
     "copyright": "Copyright © 2026 AI智译",
+    "afterPack": "./scripts/afterPack-icon.js",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -34,13 +35,29 @@
       "index.html",
       "overlay.html",
       "result.html",
+      "inplace.html",
       "electron/**/*",
-      "package.json"
+      "package.json",
+      "build/icon.ico",
+      "build/icon.png",
+      "build/icon-16.png"
     ],
     "extraResources": [
       {
         "from": "build/app-update.yml",
         "to": "app-update.yml"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "build/icon-16.png",
+        "to": "icon-16.png"
+      },
+      {
+        "from": "electron/helpers",
+        "to": "helpers"
       }
     ],
     "publish": [

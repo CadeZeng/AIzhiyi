@@ -9,25 +9,27 @@ const path = require('path');
 let tray = null;
 let isQuiting = false;
 
-function create(win) {
-  // 优先使用 16x16 小尺寸图标，避免托盘失真
-  const icon16Path = path.join(__dirname, '..', 'build', 'icon-16.png');
-  const iconIcoPath = path.join(__dirname, '..', 'build', 'icon.ico');
-  let icon = null;
-
-  try {
-    // 优先尝试 PNG 16
-    icon = nativeImage.createFromPath(icon16Path);
-    if (icon.isEmpty()) {
-      // 降级到 ICO 并缩放
-      icon = nativeImage.createFromPath(iconIcoPath);
-      if (!icon.isEmpty()) icon = icon.resize({ width: 16, height: 16 });
-    }
-  } catch (_) {
-    icon = nativeImage.createEmpty();
+function loadTrayIcon() {
+  const candidates = [
+    path.join(__dirname, '..', 'build', 'icon-16.png'),
+    path.join(process.resourcesPath || '', 'icon-16.png'),
+    path.join(__dirname, '..', 'build', 'icon.ico'),
+    path.join(process.resourcesPath || '', 'icon.ico')
+  ];
+  for (const iconPath of candidates) {
+    try {
+      let icon = nativeImage.createFromPath(iconPath);
+      if (icon && !icon.isEmpty()) {
+        if (icon.getSize().width > 16) icon = icon.resize({ width: 16, height: 16 });
+        return icon;
+      }
+    } catch (_) {}
   }
+  return nativeImage.createEmpty();
+}
 
-  if (icon.isEmpty()) icon = nativeImage.createEmpty();
+function create(win) {
+  const icon = loadTrayIcon();
 
   tray = new Tray(icon);
   tray.setToolTip('AI智译 · 翻译与提示词优化工具');

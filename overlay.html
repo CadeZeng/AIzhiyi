@@ -4,10 +4,12 @@
 <meta charset="UTF-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;user-select:none}
-html,body{width:100vw;height:100vh;overflow:hidden;cursor:crosshair}
+html,body{width:100vw;height:100vh;overflow:hidden;cursor:crosshair;background:#000}
+#freeze{position:fixed;inset:0;pointer-events:none}
+#freeze img{position:absolute;max-width:none}
 #mask{
   position:fixed;inset:0;
-  background:rgba(0,0,0,0.45);
+  background:rgba(0,0,0,0.28);
   pointer-events:none;
 }
 #tip{
@@ -18,37 +20,56 @@ html,body{width:100vw;height:100vh;overflow:hidden;cursor:crosshair}
   border:1px solid rgba(59,130,246,0.35);
   pointer-events:none;
   box-shadow:0 4px 12px rgba(0,0,0,0.3);
+  z-index:5;
 }
 #tip .accent{color:#3B82F6;font-weight:600}
 #sel{
   position:fixed;border:2px solid #3B82F6;
   background:rgba(59,130,246,0.08);
   pointer-events:none;
-  box-shadow:0 0 0 9999px rgba(0,0,0,0.45);
+  box-shadow:0 0 0 9999px rgba(0,0,0,0.4);
+  z-index:4;
 }
 #sel.hidden{display:none}
 #size{
   position:fixed;background:rgba(19,24,32,0.95);color:#60A5FA;
   font-size:11px;padding:2px 6px;border-radius:4px;
-  pointer-events:none;border:1px solid rgba(59,130,246,0.3);
+  pointer-events:none;border:1px solid rgba(59,130,246,0.3);z-index:5;
 }
 #size.hidden{display:none}
 </style>
 </head>
 <body>
+<div id="freeze"></div>
 <div id="mask"></div>
-<div id="tip"><span class="accent">拖拽</span>选择翻译区域 · <span class="accent">Esc</span> 取消</div>
+<div id="tip"><span class="accent">拖拽</span>选择翻译区域 · <span class="accent">Esc</span> 取消 · 屏幕已冻结</div>
 <div id="sel" class="hidden"></div>
 <div id="size" class="hidden"></div>
 <script>
 const sel = document.getElementById('sel');
 const sizeEl = document.getElementById('size');
+const freeze = document.getElementById('freeze');
 let start = null;
 let rect = null;
 
-// 调试：确认 JS 执行
 document.title = 'overlay-ready';
 console.log('[overlay] JS 已加载，overlayAPI:', typeof window.overlayAPI);
+
+if (window.overlayAPI && window.overlayAPI.onInit) {
+  window.overlayAPI.onInit((data) => {
+    freeze.innerHTML = '';
+    const origin = data.origin || { x: 0, y: 0 };
+    (data.screens || []).forEach((s) => {
+      const img = new Image();
+      img.src = s.dataUrl;
+      img.style.left = (s.bounds.x - origin.x) + 'px';
+      img.style.top = (s.bounds.y - origin.y) + 'px';
+      img.style.width = s.bounds.width + 'px';
+      img.style.height = s.bounds.height + 'px';
+      freeze.appendChild(img);
+    });
+  });
+}
 
 document.addEventListener('mousedown', (e) => {
   console.log('[overlay] mousedown', e.clientX, e.clientY);
@@ -87,7 +108,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') window.overlayAPI.cancel();
 });
 
-// 右键取消
 document.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   window.overlayAPI.cancel();

@@ -5,7 +5,9 @@
 
 const { execSync } = require('child_process');
 
+const pkg = require('../package.json');
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
+const CURRENT = String((pkg && pkg.version) || '0.0.0');
 
 if (!TOKEN) {
   console.error('\n[ERROR] 未检测到 GH_TOKEN 环境变量。\n');
@@ -27,8 +29,10 @@ if (!TOKEN) {
 }
 
 console.log('[INFO] GH_TOKEN 已检测到，长度:', TOKEN.length);
+console.log('[INFO] 即将发布版本:', CURRENT);
 console.log('[INFO] 目标仓库: github.com/CadeZeng/AIzhiyi');
 console.log('[INFO] 开始调用 electron-builder 发布...\n');
+console.log('[TIP] 若版本仍是上次的号，请先改 package.json 的 version 再发布，否则用户端不会提示更新。\n');
 
 try {
   execSync('electron-builder --win --x64 --publish always', {

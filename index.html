@@ -1142,8 +1142,40 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;backgr
   border-color:rgba(59,130,246,0.4);
   background:rgba(59,130,246,0.08);
 }
+.about-link:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  pointer-events:none;
+}
+.about-link-primary{
+  color:#fff;
+  background:linear-gradient(135deg, var(--accent-from), var(--accent-to));
+  border-color:transparent;
+}
+.about-link-primary:hover{
+  color:#fff;
+  filter:brightness(1.08);
+  background:linear-gradient(135deg, var(--accent-from), var(--accent-to));
+  border-color:transparent;
+}
 .about-link svg{width:14px;height:14px}
 .about-action-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.about-update-progress{
+  margin-top:12px;
+  height:6px;
+  background:rgba(59,130,246,0.14);
+  border-radius:999px;
+  overflow:hidden;
+  display:none;
+}
+.about-update-progress.show{display:block}
+.about-update-progress-bar{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg, var(--accent-from), var(--accent-to));
+  border-radius:999px;
+  transition:width .2s ease;
+}
 .about-status{
   margin-top:14px;padding:10px 14px;
   border-radius:var(--r-sm);font-size:12px;
@@ -1157,6 +1189,10 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;backgr
   background:rgba(239,68,68,0.08);
   border-color:rgba(239,68,68,0.3);
   color:#fca5a5;
+  overflow-wrap:anywhere;
+  line-height:1.55;
+  max-height:140px;
+  overflow:auto;
 }
 .about-status.success{
   background:rgba(34,197,94,0.08);
@@ -1196,6 +1232,15 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;backgr
 .settings-row-title{font-size:13px;font-weight:600;margin-bottom:3px;color:var(--text-primary)}
 .settings-row-desc{font-size:12px;color:var(--text-secondary);line-height:1.5}
 .settings-control{flex-shrink:0;min-width:280px}
+.settings-select{
+  background:var(--bg-card-glass);
+  border:1px solid var(--border);
+  color:var(--text-primary);
+  border-radius:6px;
+  padding:6px 10px;
+  font-size:12px;
+  min-width:140px;
+}
 
 .api-key-wrapper{position:relative}
 .api-key-input{
@@ -1441,7 +1486,7 @@ button:focus-visible{outline-offset:2px}
           <path d="M5 8h14M5 8l3 3M19 8l-3 3M9 16h6M12 13v6"/>
         </svg>
       </div>
-      <div class="titlebar-title">AI智译<span class="version">v0.2.0</span></div>
+      <div class="titlebar-title">AI智译<span class="version" id="titlebarVersion">v1.0.1</span></div>
     </div>
     <div class="titlebar-right">
       <button class="win-btn" title="最小化" id="winMin">
@@ -2040,13 +2085,13 @@ button:focus-visible{outline-offset:2px}
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 2v20M2 12h20"/></svg>
                     悬停取词翻译
                   </div>
-                  <div class="settings-section-desc">应用内：悬停文本按住拖选，松开后点击翻译。应用外（任意软件）：复制文字后按 Alt+T 剪贴板翻译；Ctrl+Shift+J 光标 OCR 取词；Alt+Q 截图翻译。桌面 LOGO 小球为翻译总开关（可拖动、点击开关）。</div>
+                  <div class="settings-section-desc">应用内可拖选取词。应用外：鼠标悬停取词（UIA 只读 + OCR 兜底，不点击、不抢焦点、不改选区、不改剪贴板）。目标语言使用顶部语言栏。桌面 LOGO 小球为翻译总开关。</div>
                 </div>
                 <div class="settings-body">
                   <div class="settings-row">
                     <div class="settings-row-info">
                       <div class="settings-row-title">启用悬停取词</div>
-                      <div class="settings-row-desc">鼠标悬停到文本后按住拖选词句，点击按钮翻译（需 LOGO 小球为开启状态）</div>
+                      <div class="settings-row-desc">开启后：应用内拖选翻译；其他软件中按住修饰键悬停即可取词翻译（需 LOGO 小球开启）</div>
                     </div>
                     <div class="settings-control">
                       <div class="toggle-switch" id="hoverTranslateToggle" title="悬停取词开关">
@@ -2057,11 +2102,62 @@ button:focus-visible{outline-offset:2px}
                   <div class="settings-row">
                     <div class="settings-row-info">
                       <div class="settings-row-title">悬停延迟</div>
-                      <div class="settings-row-desc">鼠标悬停多久后显示可拖选提示（100-800ms）</div>
+                      <div class="settings-row-desc">鼠标稳定多久后取词（100-800ms，默认 350ms）</div>
                     </div>
                     <div class="settings-control">
-                      <input type="range" id="hoverDelaySlider" min="100" max="800" step="50" value="300" style="width:140px;accent-color:var(--accent-from)">
-                      <span id="hoverDelayValue" style="font-size:12px;color:var(--text-secondary);min-width:40px;text-align:right">300ms</span>
+                      <input type="range" id="hoverDelaySlider" min="100" max="800" step="50" value="350" style="width:140px;accent-color:var(--accent-from)">
+                      <span id="hoverDelayValue" style="font-size:12px;color:var(--text-secondary);min-width:40px;text-align:right">350ms</span>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">修饰键</div>
+                      <div class="settings-row-desc">按住修饰键才取词，避免误触。观察按键状态，不拦截该键</div>
+                    </div>
+                    <div class="settings-control">
+                      <select class="settings-select" id="hoverModifierSelect">
+                        <option value="alt">Alt（推荐）</option>
+                        <option value="ctrl">Ctrl</option>
+                        <option value="shift">Shift</option>
+                        <option value="none">无（悬停即取）</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">取词粒度</div>
+                      <div class="settings-row-desc">UIA 只读 RangeFromPoint 扩展单位；不支持时 OCR 按词兜底</div>
+                    </div>
+                    <div class="settings-control">
+                      <select class="settings-select" id="hoverGranularitySelect">
+                        <option value="auto">自动</option>
+                        <option value="word">单词</option>
+                        <option value="phrase">短语</option>
+                        <option value="sentence">句子</option>
+                        <option value="paragraph">段落</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">跳过代码 / URL / 数字</div>
+                      <div class="settings-row-desc">识别为代码、链接或纯数字时默认不翻译</div>
+                    </div>
+                    <div class="settings-control" style="display:flex;gap:10px;flex-wrap:wrap">
+                      <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="skipCodeCheck" checked> 代码</label>
+                      <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="skipUrlCheck" checked> URL</label>
+                      <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="skipNumberCheck" checked> 数字</label>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">悬浮窗内容</div>
+                      <div class="settings-row-desc">原文、音标/释义、源语言；主题跟随应用</div>
+                    </div>
+                    <div class="settings-control" style="display:flex;gap:10px;flex-wrap:wrap">
+                      <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="showOriginalCheck" checked> 原文</label>
+                      <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="showPhoneticCheck" checked> 音标释义</label>
+                      <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="showSourceLangCheck" checked> 源语言</label>
                     </div>
                   </div>
                 </div>
@@ -2072,18 +2168,30 @@ button:focus-visible{outline-offset:2px}
                 <div class="settings-section-header">
                   <div class="settings-section-title">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 012-2h2m6 0h2a2 2 0 012 2v2m0 6v2a2 2 0 01-2 2h-2m-6 0H7a2 2 0 01-2-2v-2"/><circle cx="12" cy="12" r="3"/></svg>
-                    截图 OCR 翻译
+                    截图 OCR 原位替换
                   </div>
-                  <div class="settings-section-desc">按 Alt+Q 框选屏幕区域，OCR 识别并翻译。适用于自绘界面、图片等无法选中文本的场景。</div>
+                  <div class="settings-section-desc">Alt+Q 冻结屏幕并框选。按 OCR 文本行 bbox 在截图位置覆盖译文，视觉上替换原文。覆盖层不抢焦点，Esc 或点击外部关闭。</div>
                 </div>
                 <div class="settings-body">
                   <div class="settings-row">
                     <div class="settings-row-info">
                       <div class="settings-row-title">快捷键</div>
-                      <div class="settings-row-desc">Alt+Q 进入框选模式（全局快捷键，随主快捷键开关联动）</div>
+                      <div class="settings-row-desc">Alt+Q 进入框选模式（随主快捷键与 LOGO 小球开关联动）</div>
                     </div>
                     <div class="settings-control">
                       <kbd style="background:var(--bg-hover);border:1px solid var(--border);padding:3px 8px;border-radius:4px;font-size:11px;font-family:monospace">Alt+Q</kbd>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">OCR 引擎</div>
+                      <div class="settings-row-desc">Windows OCR 返回文字块坐标；失败时用视觉模型兜底（无精确 bbox 时退化为浮动窗）</div>
+                    </div>
+                    <div class="settings-control">
+                      <select class="settings-select" id="ocrEngineSelect">
+                        <option value="windows">Windows OCR（推荐）</option>
+                        <option value="vision">仅视觉模型</option>
+                      </select>
                     </div>
                   </div>
                   <div class="settings-row">
@@ -2159,7 +2267,7 @@ button:focus-visible{outline-offset:2px}
               <div class="about-tagline">Vibe Coding 辅助翻译与提示词优化工具。基于 Electron 构建，集成多模型 AI 能力。</div>
               <div class="about-version-badge">
                 <span class="dot"></span>
-                <span id="aboutVersionTag">v1.0.0</span>
+                <span id="aboutVersionTag">v1.0.1</span>
               </div>
             </div>
 
@@ -2174,7 +2282,7 @@ button:focus-visible{outline-offset:2px}
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">应用版本</span>
-                  <span class="about-info-value" id="aboutAppVersion">1.0.0</span>
+                  <span class="about-info-value" id="aboutAppVersion">1.0.1</span>
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">Electron</span>
@@ -2206,21 +2314,32 @@ button:focus-visible{outline-offset:2px}
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">仓库地址</span>
-                  <span class="about-info-value">CadeZeng/AIzhiyi</span>
+                  <span class="about-info-value">CadeZeng/AIzhiyi（需公开）</span>
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">签名状态</span>
                   <span class="about-info-value" id="aboutSignStatus">未签名（测试版）</span>
+                </div>
+                <div class="about-info-row" id="aboutLatestRow" hidden>
+                  <span class="about-info-label">最新版本</span>
+                  <span class="about-info-value" id="aboutLatestVersion">—</span>
                 </div>
                 <div class="about-action-row">
                   <button class="about-link" id="aboutCheckUpdateBtn" type="button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
                     检查更新
                   </button>
+                  <button class="about-link about-link-primary" id="aboutInstallUpdateBtn" type="button" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    立即更新
+                  </button>
                   <button class="about-link" id="aboutOpenLogsBtn" type="button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>
                     打开日志文件夹
                   </button>
+                </div>
+                <div class="about-update-progress" id="aboutUpdateProgress">
+                  <div class="about-update-progress-bar" id="aboutUpdateProgressBar"></div>
                 </div>
                 <div class="about-status" id="aboutUpdateStatus"></div>
               </div>
@@ -2492,7 +2611,20 @@ const state = {
     // 悬停取词翻译开关
     hoverTranslateEnabled: false,
     // 悬停延迟（ms）
-    hoverDelay: 300,
+    hoverDelay: 350,
+    hoverModifier: "alt",
+    hoverGranularity: "auto",
+    hoverMoveThreshold: 6,
+    hoverHideTimeout: 8000,
+    skipCode: true,
+    skipUrl: true,
+    skipNumber: true,
+    showOriginal: true,
+    showPhonetic: true,
+    showSourceLang: true,
+    ocrEngine: "windows",
+    targetLang: "简体中文",
+    sourceLang: "auto",
     // 截图 OCR 翻译开关
     screenshotTranslateEnabled: true
   },
@@ -2505,6 +2637,38 @@ const state = {
   glossary: [],
   favorites: []
 };
+
+function syncConfigToMain(){
+  if(!window.electronAPI?.configSync) return;
+  const tgt = document.getElementById("tgtLang")?.value || state.settings.targetLang || "简体中文";
+  const src = document.getElementById("srcLang")?.value || state.settings.sourceLang || "auto";
+  window.electronAPI.configSync({
+    provider: state.settings.provider,
+    apiKey: state.settings.apiKey,
+    baseUrl: state.settings.baseUrl,
+    model: state.settings.model,
+    visionProvider: state.settings.visionProvider,
+    visionApiKey: state.settings.visionApiKey,
+    visionModel: state.settings.visionModel,
+    visionBaseUrl: state.settings.visionBaseUrl,
+    hoverEnabled: state.settings.hoverTranslateEnabled,
+    hoverDelay: state.settings.hoverDelay,
+    hoverModifier: state.settings.hoverModifier || "alt",
+    hoverGranularity: state.settings.hoverGranularity || "auto",
+    hoverMoveThreshold: state.settings.hoverMoveThreshold || 6,
+    hoverHideTimeout: state.settings.hoverHideTimeout || 8000,
+    skipCode: state.settings.skipCode !== false,
+    skipUrl: state.settings.skipUrl !== false,
+    skipNumber: state.settings.skipNumber !== false,
+    showOriginal: state.settings.showOriginal !== false,
+    showPhonetic: state.settings.showPhonetic !== false,
+    showSourceLang: state.settings.showSourceLang !== false,
+    ocrEngine: state.settings.ocrEngine || "windows",
+    targetLang: tgt,
+    sourceLang: src,
+    theme: state.settings.theme || "dark"
+  }).catch(()=>{});
+}
 
 // ============ localStorage + secureStore 加密存储 ============
 const Storage = {
@@ -2572,20 +2736,7 @@ const Storage = {
     }
     localStorage.setItem("ai-translator-settings", JSON.stringify(settingsCopy));
     // 同步到主进程（让悬停/截图模块能拿到最新 API 配置）
-    if(window.electronAPI?.configSync){
-      window.electronAPI.configSync({
-        provider: state.settings.provider,
-        apiKey: state.settings.apiKey,
-        baseUrl: state.settings.baseUrl,
-        model: state.settings.model,
-        visionProvider: state.settings.visionProvider,
-        visionApiKey: state.settings.visionApiKey,
-        visionModel: state.settings.visionModel,
-        visionBaseUrl: state.settings.visionBaseUrl,
-        hoverEnabled: state.settings.hoverTranslateEnabled,
-        hoverDelay: state.settings.hoverDelay
-      }).catch(()=>{});
-    }
+    syncConfigToMain();
   },
 
   // 迁移：把 localStorage 中的明文 apiKey/visionApiKey 迁移到 secureStore
@@ -3031,6 +3182,9 @@ document.getElementById("swapLangBtn").addEventListener("click", ()=>{
   const tmp = src.value;
   src.value = tgt.value;
   tgt.value = tmp;
+  state.settings.sourceLang = src.value;
+  state.settings.targetLang = tgt.value;
+  Storage.saveSettings();
   toast("语言已交换","info");
 });
 
@@ -3632,15 +3786,28 @@ function updateHoverToggle(){
   hoverTranslateToggle.classList.toggle("on", state.settings.hoverTranslateEnabled);
   if(hoverDelaySlider) hoverDelaySlider.value = state.settings.hoverDelay;
   if(hoverDelayValue) hoverDelayValue.textContent = state.settings.hoverDelay + "ms";
+  const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+  const setChk = (id, val) => { const el = document.getElementById(id); if(el) el.checked = val !== false; };
+  setVal("hoverModifierSelect", state.settings.hoverModifier || "alt");
+  setVal("hoverGranularitySelect", state.settings.hoverGranularity || "auto");
+  setVal("ocrEngineSelect", state.settings.ocrEngine || "windows");
+  setChk("skipCodeCheck", state.settings.skipCode);
+  setChk("skipUrlCheck", state.settings.skipUrl);
+  setChk("skipNumberCheck", state.settings.skipNumber);
+  setChk("showOriginalCheck", state.settings.showOriginal);
+  setChk("showPhoneticCheck", state.settings.showPhonetic);
+  setChk("showSourceLangCheck", state.settings.showSourceLang);
 }
 // LOGO 小球翻译总开关状态（主进程推送）
 let ballEnabled = true;
 function applyBallStateToModule(){
-  if(!window.AISelectionTranslate) return;
-  if(ballEnabled && state.settings.hoverTranslateEnabled){
-    window.AISelectionTranslate.start();
-  }else if(!ballEnabled && window.AISelectionTranslate.isRunning()){
-    window.AISelectionTranslate.stop();
+  const on = !!(ballEnabled && state.settings.hoverTranslateEnabled);
+  if(window.AISelectionTranslate){
+    if(on) window.AISelectionTranslate.start();
+    else if(window.AISelectionTranslate.isRunning()) window.AISelectionTranslate.stop();
+  }
+  if(window.electronAPI?.hover?.setEnabled){
+    window.electronAPI.hover.setEnabled(on);
   }
 }
 if(hoverTranslateToggle){
@@ -3648,23 +3815,15 @@ if(hoverTranslateToggle){
     state.settings.hoverTranslateEnabled = !state.settings.hoverTranslateEnabled;
     Storage.saveSettings();
     updateHoverToggle();
-    // 关闭旧 OCR 悬停取词（避免自动翻译窗口打扰）
-    if(window.electronAPI?.hover?.setEnabled){
-      window.electronAPI.hover.setEnabled(false);
-    }
-    // 启动/停止前端取词模块（DOM 文本取词，点击才翻译）
-    if(window.AISelectionTranslate){
-      if(state.settings.hoverTranslateEnabled){
-        if(!ballEnabled){
-          toast("设置已保存。桌面 LOGO 小球当前为关闭状态，点击小球开启后生效", "info");
-        }else{
-          window.AISelectionTranslate.start();
-          toast("悬停取词已开启，鼠标悬停到文本后按住拖选，松开点击翻译", "info");
-        }
+    applyBallStateToModule();
+    if(state.settings.hoverTranslateEnabled){
+      if(!ballEnabled){
+        toast("设置已保存。桌面 LOGO 小球当前为关闭状态，点击小球开启后生效", "info");
       }else{
-        window.AISelectionTranslate.stop();
-        toast("悬停取词已关闭", "info");
+        toast("悬停取词已开启：应用内可拖选；其他软件请按住 Alt 悬停取词", "info");
       }
+    }else{
+      toast("悬停取词已关闭", "info");
     }
   });
 }
@@ -3678,6 +3837,24 @@ if(hoverDelaySlider){
     }
   });
 }
+
+function bindHoverSetting(id, key, isCheck){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener("change", ()=>{
+    state.settings[key] = isCheck ? !!el.checked : el.value;
+    Storage.saveSettings();
+  });
+}
+bindHoverSetting("hoverModifierSelect", "hoverModifier", false);
+bindHoverSetting("hoverGranularitySelect", "hoverGranularity", false);
+bindHoverSetting("ocrEngineSelect", "ocrEngine", false);
+bindHoverSetting("skipCodeCheck", "skipCode", true);
+bindHoverSetting("skipUrlCheck", "skipUrl", true);
+bindHoverSetting("skipNumberCheck", "skipNumber", true);
+bindHoverSetting("showOriginalCheck", "showOriginal", true);
+bindHoverSetting("showPhoneticCheck", "showPhonetic", true);
+bindHoverSetting("showSourceLangCheck", "showSourceLang", true);
 
 // ============ 截图 OCR 翻译 ============
 const screenshotTestBtn = document.getElementById("screenshotTestBtn");
@@ -3697,10 +3874,16 @@ if(screenshotTestBtn){
 // ============ 数据导出/导入 ============
 async function exportData(){
   try{
+    let appVersion = "1.0.1";
+    try{
+      if(window.electronAPI?.getAppVersion){
+        appVersion = await window.electronAPI.getAppVersion();
+      }
+    }catch(_){}
     const data = {
       _meta: {
         app: "AI智译",
-        version: "1.0.0",
+        version: appVersion,
         exportedAt: new Date().toISOString()
       },
       settings: { ...state.settings },
@@ -4018,34 +4201,26 @@ function init(){
   // 主动迁移：如果 localStorage 中有明文 apiKey 且 secureStore 可用，迁移到加密存储
   Storage.migrateSecureStore();
   // 同步配置到主进程（悬停/截图/AI 配置）
-  if(window.electronAPI?.configSync){
-    window.electronAPI.configSync({
-      provider: state.settings.provider,
-      apiKey: state.settings.apiKey,
-      baseUrl: state.settings.baseUrl,
-      model: state.settings.model,
-      visionProvider: state.settings.visionProvider,
-      visionApiKey: state.settings.visionApiKey,
-      visionModel: state.settings.visionModel,
-      visionBaseUrl: state.settings.visionBaseUrl,
-      hoverEnabled: state.settings.hoverTranslateEnabled,
-      hoverDelay: state.settings.hoverDelay
-    }).catch(()=>{});
-    // 若已启用悬停取词，同步启动主进程监听
-    if(state.settings.hoverTranslateEnabled && window.electronAPI.hover?.setEnabled){
-      window.electronAPI.hover.setEnabled(true);
-    }
-    if(window.electronAPI.hover?.setDelay){
-      window.electronAPI.hover.setDelay(state.settings.hoverDelay);
-    }
+  const srcSel = document.getElementById("srcLang");
+  const tgtSel = document.getElementById("tgtLang");
+  if(srcSel && state.settings.sourceLang) srcSel.value = state.settings.sourceLang;
+  if(tgtSel && state.settings.targetLang) tgtSel.value = state.settings.targetLang;
+  if(srcSel){
+    srcSel.addEventListener("change", ()=>{
+      state.settings.sourceLang = srcSel.value;
+      Storage.saveSettings();
+    });
   }
-  // 确保旧的 OCR 悬停取词被关闭（改用前端取词，避免自动翻译窗口打扰）
-  if(window.electronAPI?.hover?.setEnabled){
-    window.electronAPI.hover.setEnabled(false);
+  if(tgtSel){
+    tgtSel.addEventListener("change", ()=>{
+      state.settings.targetLang = tgtSel.value;
+      Storage.saveSettings();
+    });
   }
-  // 启动前端取词模块（如果已开启且 LOGO 小球为开启状态）
-  if(state.settings.hoverTranslateEnabled && window.AISelectionTranslate && ballEnabled){
-    window.AISelectionTranslate.start();
+  syncConfigToMain();
+  applyBallStateToModule();
+  if(window.electronAPI?.hover?.setDelay){
+    window.electronAPI.hover.setDelay(state.settings.hoverDelay);
   }
   // 同步 LOGO 小球状态：初始查询 + 持续监听主进程推送
   if(window.electronAPI?.ball){
@@ -4056,7 +4231,7 @@ function init(){
     window.electronAPI.ball.onStateChanged((v)=>{
       ballEnabled = !!v;
       applyBallStateToModule();
-      toast(v ? "翻译已开启（应用内取词 + 应用外快捷键已生效）" : "翻译已关闭（应用内取词与应用外快捷键已停止）", "info");
+      toast(v ? "翻译已开启（应用内取词 + 全局悬停/截图快捷键已生效）" : "翻译已关闭（应用内取词与应用外快捷键已停止）", "info");
     });
   }
 }
@@ -4234,6 +4409,7 @@ document.getElementById("welcomeToggleKey").addEventListener("click", () => {
   // 1. 填充版本信息
   const appVersionEl = document.getElementById('aboutAppVersion');
   const versionTagEl = document.getElementById('aboutVersionTag');
+  const titlebarVersionEl = document.getElementById('titlebarVersion');
   const electronVerEl = document.getElementById('aboutElectronVer');
   const nodeVerEl = document.getElementById('aboutNodeVer');
   const chromeVerEl = document.getElementById('aboutChromeVer');
@@ -4245,6 +4421,7 @@ document.getElementById("welcomeToggleKey").addEventListener("click", () => {
         const v = await window.electronAPI.getAppVersion();
         if(appVersionEl) appVersionEl.textContent = v;
         if(versionTagEl) versionTagEl.textContent = 'v' + v;
+        if(titlebarVersionEl) titlebarVersionEl.textContent = 'v' + v;
       }catch(e){ /* 降级使用占位 */ }
       if(electronVerEl) electronVerEl.textContent = window.electronAPI.versions?.electron || '—';
       if(nodeVerEl) nodeVerEl.textContent = window.electronAPI.versions?.node || '—';
@@ -4259,14 +4436,101 @@ document.getElementById("welcomeToggleKey").addEventListener("click", () => {
   }
   fillVersions();
 
-  // 2. 更新检查按钮
+  // 2. 更新检查 / 立即更新
   const checkBtn = document.getElementById('aboutCheckUpdateBtn');
+  const installBtn = document.getElementById('aboutInstallUpdateBtn');
   const statusEl = document.getElementById('aboutUpdateStatus');
+  const latestRow = document.getElementById('aboutLatestRow');
+  const latestEl = document.getElementById('aboutLatestVersion');
+  const progressWrap = document.getElementById('aboutUpdateProgress');
+  const progressBar = document.getElementById('aboutUpdateProgressBar');
+
+  const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  const ICON_RESTART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+
+  let updatePhase = 'idle'; // idle | available | downloading | downloaded
+  let lastKnownVersion = null;
 
   function showStatus(msg, type){
     if(!statusEl) return;
     statusEl.textContent = msg;
     statusEl.className = 'about-status show' + (type ? ' ' + type : '');
+  }
+
+  function setLatestVersion(version){
+    if(!latestRow || !latestEl) return;
+    if(version){
+      latestEl.textContent = 'v' + String(version).replace(/^v/i, '');
+      latestRow.hidden = false;
+    } else {
+      latestRow.hidden = true;
+    }
+  }
+
+  function setProgress(percent, visible){
+    if(!progressWrap || !progressBar) return;
+    if(visible){
+      progressWrap.classList.add('show');
+      progressBar.style.width = Math.max(0, Math.min(100, Math.round(percent || 0))) + '%';
+    } else {
+      progressWrap.classList.remove('show');
+      progressBar.style.width = '0%';
+    }
+  }
+
+  function setInstallButton(phase, version){
+    updatePhase = phase;
+    if(version) lastKnownVersion = version;
+    const ver = version || lastKnownVersion;
+    if(!installBtn) return;
+    if(phase === 'available'){
+      installBtn.hidden = false;
+      installBtn.disabled = false;
+      installBtn.classList.add('about-link-primary');
+      installBtn.innerHTML = ICON_DOWNLOAD + ' 立即更新';
+      setLatestVersion(ver);
+    } else if(phase === 'downloading'){
+      installBtn.hidden = false;
+      installBtn.disabled = true;
+      installBtn.classList.add('about-link-primary');
+      installBtn.innerHTML = ICON_DOWNLOAD + ' 正在下载';
+      setLatestVersion(ver);
+    } else if(phase === 'downloaded'){
+      installBtn.hidden = false;
+      installBtn.disabled = false;
+      installBtn.classList.add('about-link-primary');
+      installBtn.innerHTML = ICON_RESTART + ' 立即重启安装';
+      setLatestVersion(ver);
+      setProgress(100, true);
+    } else {
+      lastKnownVersion = null;
+      installBtn.hidden = true;
+      installBtn.disabled = false;
+      setProgress(0, false);
+      setLatestVersion(null);
+    }
+  }
+
+  function applyUpdateState(state){
+    if(!state) return;
+    const status = state.status || state.reason;
+    const version = state.version;
+    if(status === 'downloaded'){
+      setInstallButton('downloaded', version);
+      if(state.message) showStatus(state.message, 'success');
+    } else if(status === 'downloading'){
+      setInstallButton('downloading', version);
+      setProgress(state.percent || 0, true);
+      if(state.message) showStatus(state.message, '');
+    } else if(status === 'available' || status === 'available-dev' || status === 'no-yml' || status === 'inactive'){
+      setInstallButton('available', version);
+      if(state.message) showStatus(state.message, 'success');
+    } else if(status === 'up-to-date'){
+      setInstallButton('idle');
+      if(state.message) showStatus(state.message, 'success');
+    } else if(status === 'error' && state.message){
+      showStatus(state.message, 'error');
+    }
   }
 
   if(checkBtn){
@@ -4278,18 +4542,47 @@ document.getElementById("welcomeToggleKey").addEventListener("click", () => {
       checkBtn.disabled = true;
       showStatus('正在检查更新...', '');
       try{
-        // 触发检查，具体结果通过事件回调显示
-        await window.electronAPI.updater.check();
-        // 1.5 秒后若状态未变化，提示已检查
-        setTimeout(()=>{
-          if(statusEl.textContent === '正在检查更新...'){
-            showStatus('已发起检查请求，若 10 秒内无响应可能为网络问题或无新版本。', '');
-          }
-        }, 1500);
+        const result = await window.electronAPI.updater.check();
+        applyUpdateState(result);
+        if(result && result.message && result.reason !== 'available' && result.reason !== 'available-dev' && result.reason !== 'downloaded' && result.reason !== 'downloading'){
+          showStatus(result.message, result.ok === false ? 'error' : 'success');
+        }
       }catch(e){
-        showStatus('检查更新失败：' + (e?.message || '未知错误'), 'error');
+        showStatus('当前已是最新版本。', 'success');
       } finally {
         checkBtn.disabled = false;
+      }
+    });
+  }
+
+  if(installBtn){
+    installBtn.addEventListener('click', async ()=>{
+      if(!isElectron || !window.electronAPI?.updater){
+        showStatus('浏览器模式不支持自动更新，请前往 GitHub Release 下载最新版本。', 'error');
+        return;
+      }
+      installBtn.disabled = true;
+      try{
+        if(updatePhase === 'downloaded'){
+          showStatus('正在重启并安装新版本…', '');
+          const result = await window.electronAPI.updater.install();
+          if(result && result.ok === false) showStatus(result.message || '安装失败', 'error');
+        } else {
+          setInstallButton('downloading');
+          showStatus('正在下载更新…', '');
+          setProgress(1, true);
+          const result = await window.electronAPI.updater.download();
+          applyUpdateState(result);
+          if(result && result.ok === false){
+            setInstallButton('available');
+            showStatus(result.message, 'error');
+          }
+        }
+      }catch(e){
+        setInstallButton(updatePhase === 'downloaded' ? 'downloaded' : 'available');
+        showStatus('更新失败：' + (e.message || e), 'error');
+      } finally {
+        if(updatePhase !== 'downloading') installBtn.disabled = false;
       }
     });
   }
@@ -4300,31 +4593,36 @@ document.getElementById("welcomeToggleKey").addEventListener("click", () => {
       showStatus('正在检查更新...', '');
     });
     window.electronAPI.updater.on('update-available', (info)=>{
-      showStatus('发现新版本 v' + (info?.version || '未知') + '，正在后台下载...', 'success');
+      setInstallButton('available', info?.version);
+      showStatus('发现新版本 v' + (info?.version || '未知') + '，点击「立即更新」即可下载安装。', 'success');
     });
     window.electronAPI.updater.on('up-to-date', ()=>{
+      if(updatePhase === 'available' || updatePhase === 'downloading' || updatePhase === 'downloaded') return;
+      setInstallButton('idle');
       showStatus('当前已是最新版本。', 'success');
     });
     window.electronAPI.updater.on('progress', (progress)=>{
-      if(progress?.percent != null){
-        showStatus('下载中 ' + Math.round(progress.percent) + '%', '');
-      }
+      const percent = progress?.percent != null ? Math.round(progress.percent) : 0;
+      if(updatePhase !== 'downloading') setInstallButton('downloading');
+      setProgress(percent, true);
+      showStatus('正在下载更新 ' + percent + '%', '');
     });
-    window.electronAPI.updater.on('downloaded', ()=>{
-      showStatus('新版本已下载完成，重启应用以完成安装。', 'success');
-      // 提示重启
-      const btn = document.getElementById('aboutCheckUpdateBtn');
-      if(btn){
-        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v6h-6"/></svg> 立即重启安装';
-        btn.onclick = async ()=>{
-          try{ await window.electronAPI.updater.install(); }
-          catch(e){ showStatus('安装失败：' + e.message, 'error'); }
-        };
-      }
+    window.electronAPI.updater.on('downloaded', (info)=>{
+      setInstallButton('downloaded', info?.version);
+      showStatus('新版本已下载完成，点击「立即重启安装」完成更新。', 'success');
     });
     window.electronAPI.updater.on('error', (err)=>{
-      showStatus('更新出错：' + (err?.message || err || '未知错误'), 'error');
+      const msg = String(err?.message || err || '未知错误');
+      if(updatePhase === 'downloading') setInstallButton('available');
+      if(/content-security-policy|_gh_sess|text\/html|<!DOCTYPE/i.test(msg)){
+        showStatus('无法获取更新信息。GitHub 仓库可能是私有的，或尚未发布 Release。请将 CadeZeng/AIzhiyi 设为 Public 后用 npm run dist:gh 发布。', 'error');
+        return;
+      }
+      showStatus(/没有发布|无法|失败|出错|请先/.test(msg) ? msg : ('更新出错：' + msg), 'error');
     });
+    if(window.electronAPI.updater.getState){
+      window.electronAPI.updater.getState().then(applyUpdateState).catch(()=>{});
+    }
   }
 
   // 4. 打开日志文件夹

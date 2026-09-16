@@ -34,7 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ====== 自动更新 ======
   updater: {
     check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
     install: () => ipcRenderer.invoke('updater:install'),
+    getState: () => ipcRenderer.invoke('updater:get-state'),
     on: (channel, callback) => {
       const handler = (_e, ...args) => callback(...args);
       ipcRenderer.on('updater:' + channel, handler);

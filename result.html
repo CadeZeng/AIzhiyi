@@ -4,75 +4,110 @@
 <meta charset="UTF-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei UI","PingFang SC",sans-serif}
+:root{
+  --bg:rgba(19,24,32,0.94); --bd:rgba(59,130,246,0.35); --tx:#E5E7EB; --muted:#9CA3AF;
+  --accent:#60A5FA; --err:#FCA5A5; --line:rgba(255,255,255,0.08);
+}
+html[data-theme="light"]{
+  --bg:rgba(255,255,255,0.96); --bd:rgba(59,130,246,0.35); --tx:#111827; --muted:#6B7280;
+  --accent:#2563EB; --err:#B91C1C; --line:rgba(15,23,42,0.08);
+}
 body{
-  background:rgba(19,24,32,0.92);
+  background:var(--bg);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border:1px solid rgba(59,130,246,0.35);
+  border:1px solid var(--bd);
   border-radius:12px;
   overflow:hidden;
-  color:#E5E7EB;
-  box-shadow:0 12px 32px rgba(0,0,0,0.5);
+  color:var(--tx);
+  box-shadow:0 12px 32px rgba(0,0,0,0.45);
 }
-.card{padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-height:100%}
-.header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08)}
-.tag{font-size:11px;color:#3B82F6;font-weight:600;display:flex;align-items:center;gap:6px}
+.card{padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px;min-height:100%}
+.header{display:flex;justify-content:space-between;align-items:center;height:24px;-webkit-app-region:no-drag}
+.tag{font-size:11px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:6px}
 .tag::before{content:"";width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#22D3EE)}
-.close-btn{cursor:pointer;color:#6B7280;font-size:16px;line-height:1;padding:2px 4px;border-radius:4px}
-.close-btn:hover{color:#fff;background:rgba(255,255,255,0.1)}
-.body{flex:1;font-size:13px;line-height:1.6;overflow-y:auto;max-height:160px}
-.original{color:#9CA3AF;font-size:12px;margin-bottom:6px}
-.translation{color:#F3F4F6;font-weight:500}
-.divider{height:1px;background:rgba(255,255,255,0.06);margin:6px 0}
+.header-actions{display:flex;align-items:center;gap:4px}
+.icon-btn{cursor:pointer;color:var(--muted);font-size:13px;line-height:1;padding:3px 6px;border-radius:4px}
+.icon-btn:hover{color:var(--tx);background:rgba(127,127,127,0.12)}
+.meta{display:flex;flex-wrap:wrap;gap:6px;font-size:10px;color:var(--muted)}
+.chip{border:1px solid var(--line);padding:1px 6px;border-radius:999px}
+.body{flex:1;font-size:13px;line-height:1.6;overflow-y:auto;max-height:150px}
+.original{color:var(--muted);font-size:12px;margin-bottom:4px}
+.phonetic{color:var(--accent);font-size:12px;margin-bottom:4px}
+.defs{color:var(--muted);font-size:12px;padding-left:14px}
+.translation{color:var(--tx);font-weight:500;white-space:pre-wrap}
+.divider{height:1px;background:var(--line);margin:6px 0}
 .actions{display:flex;justify-content:flex-end;gap:8px}
 .btn{
   font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;
-  background:rgba(59,130,246,0.12);color:#60A5FA;border:1px solid rgba(59,130,246,0.3);
-  transition:all 0.15s;
+  background:rgba(59,130,246,0.12);color:var(--accent);border:1px solid rgba(59,130,246,0.3);
 }
-.btn:hover{background:rgba(59,130,246,0.22);color:#fff}
-.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:140px;color:#9CA3AF;font-size:12px}
-.spinner{
-  width:22px;height:22px;border:2px solid rgba(59,130,246,0.2);
-  border-top-color:#3B82F6;border-radius:50%;
-  animation:spin 0.8s linear infinite;
-}
+.btn:hover{background:rgba(59,130,246,0.22)}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:120px;color:var(--muted);font-size:12px}
+.spinner{width:22px;height:22px;border:2px solid rgba(59,130,246,0.2);border-top-color:#3B82F6;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.error{color:#FCA5A5}
+.error{color:var(--err)}
+.hint{font-size:11px;color:var(--muted)}
 </style>
 </head>
 <body>
-<div class="card" id="card">
-  <div id="content"></div>
-</div>
+<div class="card" id="card"></div>
 <script>
 const card = document.getElementById('card');
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 window.resultAPI.onShow((data) => {
+  document.documentElement.dataset.theme = data.theme === 'light' ? 'light' : 'dark';
   if (data.loading) {
-    card.innerHTML = `<div class="loading"><div class="spinner"></div><div>${data.msg || '处理中...'}</div></div>`;
+    card.innerHTML = `<div class="loading"><div class="spinner"></div><div>${esc(data.msg || '处理中...')}</div></div>`;
     return;
   }
-  if (data.error) {
-    card.innerHTML = `<div class="loading error"><div>⚠</div><div>${data.msg || '处理失败'}</div></div>`;
+  if (data.error && !data.translation && !data.original) {
+    card.innerHTML = `<div class="loading error"><div>⚠</div><div>${esc(data.msg || '处理失败')}</div></div>`;
     return;
   }
-  let html = '<div class="header"><div class="tag">AI智译</div><div class="close-btn" id="closeBtn">✕</div></div>';
-  html += '<div class="body">';
-  if (data.original) {
-    html += `<div class="original">${escapeHtml(data.original)}</div>`;
-    html += '<div class="divider"></div>';
-  }
-  html += `<div class="translation">${escapeHtml(data.translation)}</div>`;
+
+  const pinLabel = data.pinned ? '取消固定' : '固定';
+  let html = `<div class="header">
+    <div class="tag">AI智译</div>
+    <div class="header-actions">
+      <div class="icon-btn" id="pinBtn" title="交互模式">${pinLabel}</div>
+      <div class="icon-btn" id="closeBtn">✕</div>
+    </div>
+  </div>`;
+  html += '<div class="meta">';
+  if (data.showSourceLang !== false && data.detected && data.detected.name) html += `<span class="chip">源语言 ${esc(data.detected.name)}</span>`;
+  if (data.targetLang) html += `<span class="chip">目标 ${esc(data.targetLang)}</span>`;
+  if (data.kindLabel) html += `<span class="chip">${esc(data.kindLabel)}</span>`;
+  if (data.pickSource) html += `<span class="chip">${esc(data.pickSource)}</span>`;
   html += '</div>';
-  if (data.translation) {
-    html += '<div class="actions"><div class="btn" id="copyBtn">复制译文</div></div>';
+  html += '<div class="body">';
+  if (data.showOriginal !== false && data.original) {
+    html += `<div class="original">${esc(data.original)}</div>`;
   }
+  if (data.showPhonetic !== false && data.phonetic) {
+    html += `<div class="phonetic">${esc(data.phonetic)}</div>`;
+  }
+  if (data.definitions && data.definitions.length) {
+    html += '<ul class="defs">' + data.definitions.map(d => `<li>${esc(d)}</li>`).join('') + '</ul>';
+  }
+  if (data.original && data.translation) html += '<div class="divider"></div>';
+  if (data.translation) html += `<div class="translation">${esc(data.translation)}</div>`;
+  if (data.hint) html += `<div class="hint">${esc(data.hint)}</div>`;
+  if (data.error && data.msg) html += `<div class="error">${esc(data.msg)}</div>`;
+  html += '</div>';
+  html += '<div class="actions">';
+  if (data.translation) html += '<div class="btn" id="copyBtn">复制译文</div>';
+  html += '</div>';
   card.innerHTML = html;
   document.getElementById('closeBtn')?.addEventListener('click', () => window.resultAPI.close());
+  document.getElementById('pinBtn')?.addEventListener('click', () => window.resultAPI.togglePin());
   document.getElementById('copyBtn')?.addEventListener('click', () => window.resultAPI.copyText(data.translation));
 });
 
-function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+window.resultAPI.onPinned?.((v) => {
+  const btn = document.getElementById('pinBtn');
+  if (btn) btn.textContent = v ? '取消固定' : '固定';
+});
 </script>
 </body>
 </html>

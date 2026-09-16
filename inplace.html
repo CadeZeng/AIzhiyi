@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:"Microsoft YaHei UI","PingFang SC",sans-serif}
+html,body{width:100%;height:100%;overflow:hidden;background:transparent}
+#toolbar{
+  position:absolute;left:0;top:0;right:0;height:32px;
+  display:flex;align-items:center;gap:6px;padding:0 8px;
+  background:rgba(15,23,42,0.92);color:#E5E7EB;font-size:11px;
+  border-bottom:1px solid rgba(59,130,246,0.35);
+}
+#toolbar .sp{flex:1}
+.btn{
+  border:1px solid rgba(59,130,246,0.35);background:rgba(59,130,246,0.15);
+  color:#93C5FD;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;
+}
+.btn:hover{background:rgba(59,130,246,0.28);color:#fff}
+#stage{position:absolute;left:0;right:0;bottom:0;top:32px;overflow:hidden}
+.line{
+  position:absolute;overflow:hidden;padding:0 2px;
+  display:flex;align-items:center;
+  white-space:pre-wrap;word-break:break-word;
+  line-height:1.15;font-weight:600;
+  box-shadow:0 0 0 0.5px rgba(0,0,0,0.18);
+}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span>AI智译 · 原位替换</span>
+  <span class="sp"></span>
+  <button class="btn" id="toggleBtn">显示原文</button>
+  <button class="btn" id="copyBtn">复制译文</button>
+  <button class="btn" id="retryBtn">重试</button>
+  <button class="btn" id="closeBtn">关闭</button>
+</div>
+<div id="stage"></div>
+<script>
+let payload = null;
+let showOriginal = false;
+const stage = document.getElementById('stage');
+
+function fitFont(el, text, maxH, maxW) {
+  let size = Math.max(8, Math.min(maxH * 0.82, 28));
+  el.style.fontSize = size + 'px';
+  el.textContent = text;
+  for (let i = 0; i < 12; i++) {
+    if (el.scrollHeight <= maxH + 1 && el.scrollWidth <= maxW + 2) break;
+    size = Math.max(8, size - 1);
+    el.style.fontSize = size + 'px';
+  }
+  if (el.scrollHeight > maxH + 1) {
+    el.style.lineHeight = '1.05';
+    el.style.alignItems = 'flex-start';
+  }
+}
+
+function render() {
+  if (!payload) return;
+  stage.innerHTML = '';
+  (payload.lines || []).forEach((line) => {
+    const el = document.createElement('div');
+    el.className = 'line';
+    const b = line.bbox;
+    el.style.left = b.x + 'px';
+    el.style.top = b.y + 'px';
+    el.style.width = Math.max(8, b.width) + 'px';
+    el.style.height = Math.max(8, b.height) + 'px';
+    el.style.background = line.background || 'rgba(17,24,39,0.92)';
+    el.style.color = line.color || '#F9FAFB';
+    const text = showOriginal ? (line.original || '') : (line.translation || line.original || '');
+    fitFont(el, text, b.height, b.width);
+    stage.appendChild(el);
+  });
+  document.getElementById('toggleBtn').textContent = showOriginal ? '显示译文' : '显示原文';
+}
+
+window.inplaceAPI.onShow((data) => {
+  payload = data;
+  showOriginal = false;
+  render();
+});
+document.getElementById('closeBtn').onclick = () => window.inplaceAPI.close();
+document.getElementById('copyBtn').onclick = () => window.inplaceAPI.copy();
+document.getElementById('retryBtn').onclick = () => window.inplaceAPI.retry();
+document.getElementById('toggleBtn').onclick = () => { showOriginal = !showOriginal; render(); };
+</script>
+</body>
+</html>

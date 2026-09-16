@@ -35,8 +35,22 @@ let cachedConfig = {
   visionModel: 'qwen-vl-max',
   visionBaseUrl: '',
   hoverEnabled: false,
-  hoverDelay: 300,
-  screenshotEnabled: true
+  hoverDelay: 350,
+  screenshotEnabled: true,
+  targetLang: '简体中文',
+  sourceLang: 'auto',
+  hoverModifier: 'alt',
+  hoverGranularity: 'auto',
+  hoverMoveThreshold: 6,
+  hoverHideTimeout: 8000,
+  skipCode: true,
+  skipUrl: true,
+  skipNumber: true,
+  showOriginal: true,
+  showPhonetic: true,
+  showSourceLang: true,
+  ocrEngine: 'windows',
+  theme: 'dark'
 };
 
 function updateConfig(partial) {
@@ -72,7 +86,7 @@ function resolveBaseUrl(provider, customUrl) {
 }
 
 // 通用 chat 请求
-async function chat(messages, { vision = false } = {}) {
+async function chat(messages, { vision = false, signal, timeout = 30000 } = {}) {
   const cfg = getConfig();
   const provider = vision ? cfg.visionProvider : cfg.provider;
   const apiKey = vision ? cfg.visionApiKey : cfg.apiKey;
@@ -94,14 +108,30 @@ async function chat(messages, { vision = false } = {}) {
 
   log.info('[ai-call] 请求:', vision ? 'vision' : 'text', 'provider=' + provider, 'model=' + model, 'url=' + url);
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeout);
+  if (signal) {
+    if (signal.aborted) ac.abort();
+    else signal.addEventListener('abort', () => ac.abort(), { once: true });
+  }
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(body),
+      signal: ac.signal
+    });
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
@@ -181,11 +211,83 @@ async function ocrAndTranslate(imageBase64, opts = {}) {
   }
 }
 
+function defaultTarget() {
+  return getConfig().targetLang || '简体中文';
+}
+
+// 严格按用户设置的目标语言翻译，不做中英自动对调
+async function translateStrict(text, targetLang, srcLang = 'auto', opts = {}) {
+  const finalTarget = targetLang || defaultTarget();
+  const srcDesc = srcLang === 'auto' ? '自动检测' : srcLang;
+  const system = `你是专业翻译。源语言：${srcDesc}。将用户输入翻译为${finalTarget}。
+规则：
+1. 只返回译文，不要任何解释或前缀
+2. 保留代码、路径、URL、变量名等原文
+3. 保持原文的换行和段落结构
+4. 若原文已经是${finalTarget}，原样返回原文`;
+  return await chat([
+    { role: 'system', content: system },
+    { role: 'user', content: text }
+  ], { vision: false, signal: opts.signal });
+}
+
+async function translateLine(text, targetLang, context = '', opts = {}) {
+  const finalTarget = targetLang || defaultTarget();
+  const system = `你是专业翻译。把「当前行」翻译为${finalTarget}。
+只返回这一行的译文，不要解释，不要引号，不要编号。
+尽量保持长度接近原文，便于原位覆盖。
+上下文仅供参考，不要翻译上下文。`;
+  const user = (context ? context + '\n\n' : '') + '当前行: ' + text;
+  return await chat([
+    { role: 'system', content: system },
+    { role: 'user', content: user }
+  ], { vision: false, signal: opts.signal, timeout: 20000 });
+}
+
+async function translateWord(word, targetLang, opts = {}) {
+  const finalTarget = targetLang || defaultTarget();
+  const system = `你是词典助手。目标语言：${finalTarget}。
+只返回 JSON，不要 Markdown：{"phonetic":"音标或空","translation":"最常用译文","definitions":["简短释义1","释义2"]}
+若不是单词而是短语，phonetic 留空，translation 给短语译文。`;
+  const raw = await chat([
+    { role: 'system', content: system },
+    { role: 'user', content: word }
+  ], { vision: false, signal: opts.signal, timeout: 20000 });
+  const jsonMatch = String(raw).match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const obj = JSON.parse(jsonMatch[0]);
+      return {
+        phonetic: obj.phonetic || '',
+        translation: obj.translation || String(raw).trim(),
+        definitions: Array.isArray(obj.definitions) ? obj.definitions.slice(0, 4) : []
+      };
+    } catch (_) {}
+  }
+  return { phonetic: '', translation: String(raw).trim(), definitions: [] };
+}
+
+async function ocrOnly(imageBase64, opts = {}) {
+  const system = '识别图片中的所有文字，按原有换行输出。不要翻译。若无法识别，回复「未识别到文字」。';
+  const userContent = [
+    { type: 'text', text: '请识别这张截图中的所有文字。' },
+    { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}` } }
+  ];
+  return await chat([
+    { role: 'system', content: system },
+    { role: 'user', content: userContent }
+  ], { vision: true, signal: opts.signal });
+}
+
 module.exports = {
   updateConfig,
   getConfig,
   loadKeysAsync,
   translateText,
+  translateStrict,
+  translateLine,
+  translateWord,
+  ocrOnly,
   ocrAndTranslate,
   chat
 };
