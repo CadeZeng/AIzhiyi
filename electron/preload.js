@@ -57,7 +57,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chrome: process.versions.chrome
   },
 
-  // ====== 悬停取词 / 截图翻译 / 配置同步 ======
+  // ====== 全局拖动取词 / 截图翻译 / 配置同步 ======
   configSync: (config) => ipcRenderer.invoke('config:sync', config),
   hover: {
     setEnabled: (enabled) => ipcRenderer.invoke('hover:set-enabled', enabled),

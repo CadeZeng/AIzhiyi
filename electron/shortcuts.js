@@ -2,8 +2,9 @@
 // AI智译 · 全局快捷键
 // Ctrl+Shift+T 唤起/隐藏窗口（常驻）
 // Alt+Q 截图 OCR 翻译      ┐
-// Ctrl+Shift+J 光标 OCR 取词 ├ 翻译类快捷键（受 LOGO 小球开关控制）
+// Ctrl+Shift+J 光标处取词   ├ 翻译类快捷键（受 LOGO 小球开关控制）
 // Alt+T 剪贴板取词翻译     ┘
+// 全局拖动取词默认 Alt，由低级钩子处理，不走 globalShortcut
 // ============================================================
 
 const { globalShortcut } = require('electron');

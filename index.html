@@ -1486,7 +1486,7 @@ button:focus-visible{outline-offset:2px}
           <path d="M5 8h14M5 8l3 3M19 8l-3 3M9 16h6M12 13v6"/>
         </svg>
       </div>
-      <div class="titlebar-title">AI智译<span class="version" id="titlebarVersion">v1.0.2</span></div>
+      <div class="titlebar-title">AI智译<span class="version" id="titlebarVersion">v1.0.3</span></div>
     </div>
     <div class="titlebar-right">
       <button class="win-btn" title="最小化" id="winMin">
@@ -2078,64 +2078,96 @@ button:focus-visible{outline-offset:2px}
                 </div>
               </div>
 
-              <!-- 悬停取词翻译 -->
+              <!-- 全局拖动取词翻译 -->
               <div class="settings-section">
                 <div class="settings-section-header">
                   <div class="settings-section-title">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 2v20M2 12h20"/></svg>
-                    悬停取词翻译
+                    全局拖动取词翻译
                   </div>
-                  <div class="settings-section-desc">应用内可拖选取词。应用外：鼠标悬停取词（UIA 只读 + OCR 兜底，不点击、不抢焦点、不改选区、不改剪贴板）。目标语言使用顶部语言栏。桌面 LOGO 小球为翻译总开关。</div>
+                  <div class="settings-section-desc">按住快捷键后拖动框选任意软件中的文字/区域。取词过程拦截鼠标与修饰键，不点击原文、不改选区、不抢焦点、不用剪贴板。可选文本走 UI Automation，图片/视频/扫描件走 OCR。目标语言使用顶部语言栏。桌面 LOGO 小球为翻译总开关。</div>
                 </div>
                 <div class="settings-body">
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">启用悬停取词</div>
-                      <div class="settings-row-desc">开启后：应用内拖选翻译；其他软件中按住修饰键悬停即可取词翻译（需 LOGO 小球开启）</div>
+                      <div class="settings-row-title">启用全局拖动取词</div>
+                      <div class="settings-row-desc">开启后：应用内仍可拖选翻译；其他软件中按住快捷键拖动框选即可翻译（需 LOGO 小球开启）</div>
                     </div>
                     <div class="settings-control">
-                      <div class="toggle-switch" id="hoverTranslateToggle" title="悬停取词开关">
+                      <div class="toggle-switch" id="hoverTranslateToggle" title="全局拖动取词开关">
                         <div class="toggle-thumb"></div>
                       </div>
                     </div>
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">悬停延迟</div>
-                      <div class="settings-row-desc">鼠标稳定多久后取词（100-800ms，默认 350ms）</div>
-                    </div>
-                    <div class="settings-control">
-                      <input type="range" id="hoverDelaySlider" min="100" max="800" step="50" value="350" style="width:140px;accent-color:var(--accent-from)">
-                      <span id="hoverDelayValue" style="font-size:12px;color:var(--text-secondary);min-width:40px;text-align:right">350ms</span>
-                    </div>
-                  </div>
-                  <div class="settings-row">
-                    <div class="settings-row-info">
-                      <div class="settings-row-title">修饰键</div>
-                      <div class="settings-row-desc">按住修饰键才取词，避免误触。观察按键状态，不拦截该键</div>
+                      <div class="settings-row-title">取词快捷键</div>
+                      <div class="settings-row-desc">按住后进入取词模式并显示遮罩。默认 Alt；若与系统菜单冲突，可改为 Ctrl / Shift，或 Alt+鼠标侧键</div>
                     </div>
                     <div class="settings-control">
                       <select class="settings-select" id="hoverModifierSelect">
-                        <option value="alt">Alt（推荐）</option>
+                        <option value="alt">Alt（默认，按住即取词）</option>
                         <option value="ctrl">Ctrl</option>
                         <option value="shift">Shift</option>
-                        <option value="none">无（悬停即取）</option>
+                        <option value="alt+xbutton1">Alt + 鼠标侧键（后退键）</option>
+                        <option value="alt+xbutton2">Alt + 鼠标侧键（前进键）</option>
                       </select>
                     </div>
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">取词粒度</div>
-                      <div class="settings-row-desc">UIA 只读 RangeFromPoint 扩展单位；不支持时 OCR 按词兜底</div>
+                      <div class="settings-row-title">优先 UI Automation</div>
+                      <div class="settings-row-desc">框选范围内只读获取文本；失败或关闭后截取选区走 OCR</div>
+                    </div>
+                    <div class="settings-control">
+                      <div class="toggle-switch" id="pickPreferUiaToggle" title="优先 UIA">
+                        <div class="toggle-thumb"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">UIA 取样单位</div>
+                      <div class="settings-row-desc">框选命中文本时的扩展单位；不可选区域仍走 OCR</div>
                     </div>
                     <div class="settings-control">
                       <select class="settings-select" id="hoverGranularitySelect">
-                        <option value="auto">自动</option>
+                        <option value="auto">自动（按行）</option>
                         <option value="word">单词</option>
                         <option value="phrase">短语</option>
-                        <option value="sentence">句子</option>
+                        <option value="sentence">句子/行</option>
                         <option value="paragraph">段落</option>
                       </select>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">选框颜色</div>
+                      <div class="settings-row-desc">取词遮罩上的框选边框颜色</div>
+                    </div>
+                    <div class="settings-control">
+                      <input type="color" id="pickBorderColorInput" value="#3B82F6" style="width:42px;height:28px;border:1px solid var(--border);border-radius:6px;background:transparent;padding:0">
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">最小选区</div>
+                      <div class="settings-row-desc">小于该尺寸的框选将取消，不翻译（8-80px）</div>
+                    </div>
+                    <div class="settings-control">
+                      <input type="range" id="pickMinSizeSlider" min="8" max="80" step="2" value="12" style="width:140px;accent-color:var(--accent-from)">
+                      <span id="pickMinSizeValue" style="font-size:12px;color:var(--text-secondary);min-width:40px;text-align:right">12px</span>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-row-info">
+                      <div class="settings-row-title">调试日志</div>
+                      <div class="settings-row-desc">在主进程日志中输出取词坐标、UIA/OCR 来源等细节</div>
+                    </div>
+                    <div class="settings-control">
+                      <div class="toggle-switch" id="pickDebugLogToggle" title="调试日志">
+                        <div class="toggle-thumb"></div>
+                      </div>
                     </div>
                   </div>
                   <div class="settings-row">
@@ -2151,8 +2183,8 @@ button:focus-visible{outline-offset:2px}
                   </div>
                   <div class="settings-row">
                     <div class="settings-row-info">
-                      <div class="settings-row-title">悬浮窗内容</div>
-                      <div class="settings-row-desc">原文、音标/释义、源语言；主题跟随应用</div>
+                      <div class="settings-row-title">结果窗口内容</div>
+                      <div class="settings-row-desc">原文、音标/释义、源语言；主题跟随应用。结果窗不抢焦点</div>
                     </div>
                     <div class="settings-control" style="display:flex;gap:10px;flex-wrap:wrap">
                       <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="showOriginalCheck" checked> 原文</label>
@@ -2267,7 +2299,7 @@ button:focus-visible{outline-offset:2px}
               <div class="about-tagline">Vibe Coding 辅助翻译与提示词优化工具。基于 Electron 构建，集成多模型 AI 能力。</div>
               <div class="about-version-badge">
                 <span class="dot"></span>
-                <span id="aboutVersionTag">v1.0.2</span>
+                <span id="aboutVersionTag">v1.0.3</span>
               </div>
             </div>
 
@@ -2282,7 +2314,7 @@ button:focus-visible{outline-offset:2px}
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">应用版本</span>
-                  <span class="about-info-value" id="aboutAppVersion">1.0.2</span>
+                  <span class="about-info-value" id="aboutAppVersion">1.0.3</span>
                 </div>
                 <div class="about-info-row">
                   <span class="about-info-label">Electron</span>
@@ -2608,9 +2640,8 @@ const state = {
     shortcutEnabled: true,
     // 剪贴板自动翻译开关
     clipboardAutoTranslate: false,
-    // 悬停取词翻译开关
+    // 全局拖动取词翻译开关
     hoverTranslateEnabled: false,
-    // 悬停延迟（ms）
     hoverDelay: 350,
     hoverModifier: "alt",
     hoverGranularity: "auto",
@@ -2623,6 +2654,10 @@ const state = {
     showPhonetic: true,
     showSourceLang: true,
     ocrEngine: "windows",
+    pickPreferUia: true,
+    pickMinSize: 12,
+    pickBorderColor: "#3B82F6",
+    pickDebugLog: false,
     targetLang: "简体中文",
     sourceLang: "auto",
     // 截图 OCR 翻译开关
@@ -2664,6 +2699,10 @@ function syncConfigToMain(){
     showPhonetic: state.settings.showPhonetic !== false,
     showSourceLang: state.settings.showSourceLang !== false,
     ocrEngine: state.settings.ocrEngine || "windows",
+    pickPreferUia: state.settings.pickPreferUia !== false,
+    pickMinSize: state.settings.pickMinSize || 12,
+    pickBorderColor: state.settings.pickBorderColor || "#3B82F6",
+    pickDebugLog: !!state.settings.pickDebugLog,
     targetLang: tgt,
     sourceLang: src,
     theme: state.settings.theme || "dark"
@@ -3777,20 +3816,27 @@ if(clipboardAutoTranslateToggle){
   });
 }
 
-// ============ 悬停取词翻译开关 ============
+// ============ 全局拖动取词翻译开关 ============
 const hoverTranslateToggle = document.getElementById("hoverTranslateToggle");
-const hoverDelaySlider = document.getElementById("hoverDelaySlider");
-const hoverDelayValue = document.getElementById("hoverDelayValue");
 function updateHoverToggle(){
   if(!hoverTranslateToggle) return;
   hoverTranslateToggle.classList.toggle("on", state.settings.hoverTranslateEnabled);
-  if(hoverDelaySlider) hoverDelaySlider.value = state.settings.hoverDelay;
-  if(hoverDelayValue) hoverDelayValue.textContent = state.settings.hoverDelay + "ms";
   const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
   const setChk = (id, val) => { const el = document.getElementById(id); if(el) el.checked = val !== false; };
-  setVal("hoverModifierSelect", state.settings.hoverModifier || "alt");
+  const setToggle = (id, on) => { const el = document.getElementById(id); if(el) el.classList.toggle("on", !!on); };
+  let mod = state.settings.hoverModifier || "alt";
+  if(mod === "none") mod = "alt";
+  setVal("hoverModifierSelect", mod);
   setVal("hoverGranularitySelect", state.settings.hoverGranularity || "auto");
   setVal("ocrEngineSelect", state.settings.ocrEngine || "windows");
+  setVal("pickBorderColorInput", state.settings.pickBorderColor || "#3B82F6");
+  const minSize = state.settings.pickMinSize || 12;
+  const minSlider = document.getElementById("pickMinSizeSlider");
+  const minLabel = document.getElementById("pickMinSizeValue");
+  if(minSlider) minSlider.value = minSize;
+  if(minLabel) minLabel.textContent = minSize + "px";
+  setToggle("pickPreferUiaToggle", state.settings.pickPreferUia !== false);
+  setToggle("pickDebugLogToggle", !!state.settings.pickDebugLog);
   setChk("skipCodeCheck", state.settings.skipCode);
   setChk("skipUrlCheck", state.settings.skipUrl);
   setChk("skipNumberCheck", state.settings.skipNumber);
@@ -3820,24 +3866,13 @@ if(hoverTranslateToggle){
       if(!ballEnabled){
         toast("设置已保存。桌面 LOGO 小球当前为关闭状态，点击小球开启后生效", "info");
       }else{
-        toast("悬停取词已开启：应用内可拖选；其他软件请按住 Alt 悬停取词", "info");
+        toast("全局拖动取词已开启：按住 Alt 拖动框选即可翻译", "info");
       }
     }else{
-      toast("悬停取词已关闭", "info");
+      toast("全局拖动取词已关闭", "info");
     }
   });
 }
-if(hoverDelaySlider){
-  hoverDelaySlider.addEventListener("change", ()=>{
-    state.settings.hoverDelay = parseInt(hoverDelaySlider.value);
-    hoverDelayValue.textContent = state.settings.hoverDelay + "ms";
-    Storage.saveSettings();
-    if(window.electronAPI?.hover?.setDelay){
-      window.electronAPI.hover.setDelay(state.settings.hoverDelay);
-    }
-  });
-}
-
 function bindHoverSetting(id, key, isCheck){
   const el = document.getElementById(id);
   if(!el) return;
@@ -3849,12 +3884,39 @@ function bindHoverSetting(id, key, isCheck){
 bindHoverSetting("hoverModifierSelect", "hoverModifier", false);
 bindHoverSetting("hoverGranularitySelect", "hoverGranularity", false);
 bindHoverSetting("ocrEngineSelect", "ocrEngine", false);
+bindHoverSetting("pickBorderColorInput", "pickBorderColor", false);
 bindHoverSetting("skipCodeCheck", "skipCode", true);
 bindHoverSetting("skipUrlCheck", "skipUrl", true);
 bindHoverSetting("skipNumberCheck", "skipNumber", true);
 bindHoverSetting("showOriginalCheck", "showOriginal", true);
 bindHoverSetting("showPhoneticCheck", "showPhonetic", true);
 bindHoverSetting("showSourceLangCheck", "showSourceLang", true);
+
+function bindToggleSetting(id, key, defaultOn){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener("click", ()=>{
+    const current = defaultOn ? state.settings[key] !== false : !!state.settings[key];
+    state.settings[key] = !current;
+    Storage.saveSettings();
+    updateHoverToggle();
+  });
+}
+bindToggleSetting("pickPreferUiaToggle", "pickPreferUia", true);
+bindToggleSetting("pickDebugLogToggle", "pickDebugLog", false);
+
+const pickMinSizeSlider = document.getElementById("pickMinSizeSlider");
+const pickMinSizeValue = document.getElementById("pickMinSizeValue");
+if(pickMinSizeSlider){
+  pickMinSizeSlider.addEventListener("input", ()=>{
+    if(pickMinSizeValue) pickMinSizeValue.textContent = pickMinSizeSlider.value + "px";
+  });
+  pickMinSizeSlider.addEventListener("change", ()=>{
+    state.settings.pickMinSize = parseInt(pickMinSizeSlider.value, 10) || 12;
+    if(pickMinSizeValue) pickMinSizeValue.textContent = state.settings.pickMinSize + "px";
+    Storage.saveSettings();
+  });
+}
 
 // ============ 截图 OCR 翻译 ============
 const screenshotTestBtn = document.getElementById("screenshotTestBtn");
@@ -3874,7 +3936,7 @@ if(screenshotTestBtn){
 // ============ 数据导出/导入 ============
 async function exportData(){
   try{
-    let appVersion = "1.0.2";
+    let appVersion = "1.0.3";
     try{
       if(window.electronAPI?.getAppVersion){
         appVersion = await window.electronAPI.getAppVersion();
@@ -4219,9 +4281,6 @@ function init(){
   }
   syncConfigToMain();
   applyBallStateToModule();
-  if(window.electronAPI?.hover?.setDelay){
-    window.electronAPI.hover.setDelay(state.settings.hoverDelay);
-  }
   // 同步 LOGO 小球状态：初始查询 + 持续监听主进程推送
   if(window.electronAPI?.ball){
     window.electronAPI.ball.getState().then((v)=>{
@@ -4231,7 +4290,7 @@ function init(){
     window.electronAPI.ball.onStateChanged((v)=>{
       ballEnabled = !!v;
       applyBallStateToModule();
-      toast(v ? "翻译已开启（应用内取词 + 全局悬停/截图快捷键已生效）" : "翻译已关闭（应用内取词与应用外快捷键已停止）", "info");
+      toast(v ? "翻译已开启（应用内取词 + 全局拖动取词/截图快捷键已生效）" : "翻译已关闭（应用内取词与应用外快捷键已停止）", "info");
     });
   }
 }

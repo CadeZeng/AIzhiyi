@@ -1,6 +1,6 @@
 // ============================================================
 // AI智译 · 主进程 AI 调用模块
-// 供悬停取词、截图 OCR 等后台功能复用
+// 供拖动取词、截图 OCR 等后台功能复用
 // 从 secureStore + localStorage 配置读取 API 凭据
 // ============================================================
 
@@ -50,6 +50,10 @@ let cachedConfig = {
   showPhonetic: true,
   showSourceLang: true,
   ocrEngine: 'windows',
+  pickPreferUia: true,
+  pickMinSize: 12,
+  pickBorderColor: '#3B82F6',
+  pickDebugLog: false,
   theme: 'dark'
 };
 

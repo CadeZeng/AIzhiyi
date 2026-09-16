@@ -326,4 +326,8 @@ function destroy() {
   busy = false;
 }
 
-module.exports = { init, trigger, closeOverlay, closeInplace, destroy };
+function isBusy() {
+  return busy || !!(overlayWin && !overlayWin.isDestroyed());
+}
+
+module.exports = { init, trigger, closeOverlay, closeInplace, destroy, isBusy };

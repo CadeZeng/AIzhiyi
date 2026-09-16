@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:transparent;
+  cursor:crosshair;
+}
+#mask{
+  position:fixed;inset:0;
+  background:rgba(8,12,20,0.14);
+  pointer-events:none;
+}
+#tip{
+  position:fixed;top:24px;left:50%;transform:translateX(-50%);
+  background:rgba(19,24,32,0.94);
+  color:#E5E7EB;font-size:13px;
+  padding:8px 16px;border-radius:8px;
+  border:1px solid rgba(59,130,246,0.35);
+  pointer-events:none;
+  box-shadow:0 4px 12px rgba(0,0,0,0.3);
+  z-index:5;
+  white-space:nowrap;
+}
+#tip .accent{color:#60A5FA;font-weight:600}
+#sel{
+  position:fixed;
+  border:2px solid var(--pick-color, #3B82F6);
+  background:transparent;
+  pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(8,12,20,0.28);
+  z-index:4;
+}
+#sel.hidden{display:none}
+#size{
+  position:fixed;background:rgba(19,24,32,0.95);color:#60A5FA;
+  font-size:11px;padding:2px 6px;border-radius:4px;
+  pointer-events:none;border:1px solid rgba(59,130,246,0.3);z-index:5;
+}
+#size.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="mask"></div>
+<div id="tip"><span class="accent">拖动</span>框选要翻译的区域 · 松开 <span class="accent">Alt</span> 翻译 · <span class="accent">Esc</span> 取消</div>
+<div id="sel" class="hidden"></div>
+<div id="size" class="hidden"></div>
+<script>
+const sel = document.getElementById('sel');
+const sizeEl = document.getElementById('size');
+const mask = document.getElementById('mask');
+const tip = document.getElementById('tip');
+
+function render(state){
+  const color = state.color || '#3B82F6';
+  document.documentElement.style.setProperty('--pick-color', color);
+  if (state.tip) tip.innerHTML = state.tip;
+  const rect = state.rect;
+  if (rect && rect.width >= 2 && rect.height >= 2) {
+    mask.style.display = 'none';
+    sel.classList.remove('hidden');
+    sizeEl.classList.remove('hidden');
+    sel.style.left = rect.x + 'px';
+    sel.style.top = rect.y + 'px';
+    sel.style.width = rect.width + 'px';
+    sel.style.height = rect.height + 'px';
+    sel.style.borderColor = color;
+    sizeEl.style.left = (rect.x + rect.width + 4) + 'px';
+    sizeEl.style.top = (rect.y + rect.height + 4) + 'px';
+    sizeEl.textContent = Math.round(rect.width) + ' × ' + Math.round(rect.height);
+  } else {
+    mask.style.display = 'block';
+    sel.classList.add('hidden');
+    sizeEl.classList.add('hidden');
+  }
+}
+
+if (window.pickAPI && window.pickAPI.onState) {
+  window.pickAPI.onState(render);
+}
+</script>
+</body>
+</html>

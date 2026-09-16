@@ -1,6 +1,6 @@
 # AI智译 Windows helper (STA)
 # Commands (JSON line in, JSON line out):
-#   keys | uia | ocr | exstyle | ping | quit
+#   keys | uia | uia-rect | ocr | exstyle | guard-start | guard-stop | ping | quit
 # Observation only: never Select/SetFocus/Invoke/SendKeys/clipboard.
 
 $ErrorActionPreference = 'Continue'
@@ -27,6 +27,7 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName WindowsBase
 
+$script:GuardLoaded = $false
 $script:OcrReady = $false
 $script:OcrEngine = $null
 $script:AsTaskOp = $null
@@ -51,8 +52,20 @@ function Await-Op($op, [Type]$resultType) {
 
 function Write-Json($obj) {
   $json = $obj | ConvertTo-Json -Compress -Depth 10
+  if ($script:GuardLoaded) {
+    try { [InputGuard]::WriteLineSafe($json); return } catch {}
+  }
   [Console]::Out.WriteLine($json)
   [Console]::Out.Flush()
+}
+
+try {
+  $guardCs = Join-Path $PSScriptRoot 'InputGuard.cs'
+  Add-Type -Path $guardCs -ErrorAction Stop
+  $script:GuardLoaded = $true
+} catch {
+  $script:GuardLoaded = $false
+  Write-Json @{ event = 'guard-error'; error = ('InputGuard compile: ' + $_.Exception.Message) }
 }
 
 function Get-Keys {
@@ -157,6 +170,132 @@ function Get-UiaText($x, $y, $unit) {
   return @{ text = ''; source = 'uia-empty'; meta = $meta }
 }
 
+function Test-RectIntersect([System.Windows.Rect]$a, [System.Windows.Rect]$b) {
+  if ($a.Width -le 0 -or $a.Height -le 0 -or $b.Width -le 0 -or $b.Height -le 0) { return $false }
+  return -not ($a.Right -lt $b.Left -or $a.Left -gt $b.Right -or $a.Bottom -lt $b.Top -or $a.Top -gt $b.Bottom)
+}
+
+function Get-UiaTextPattern($el) {
+  $cur = $el
+  $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+  for ($i = 0; $i -lt 8 -and $cur; $i++) {
+    try {
+      $tp = $cur.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)
+      if ($tp) { return $tp }
+    } catch {}
+    try { $cur = $walker.GetParent($cur) } catch { $cur = $null }
+  }
+  return $null
+}
+
+function Get-UiaTextInRect($x, $y, $w, $h, $unit) {
+  $x = [double]$x; $y = [double]$y; $w = [double]$w; $h = [double]$h
+  if ($w -lt 4 -or $h -lt 4) {
+    return @{ text = ''; source = 'uia-rect-small'; meta = @{ reason = 'rect too small' } }
+  }
+  $sel = New-Object System.Windows.Rect($x, $y, $w, $h)
+  $textUnit = [System.Windows.Automation.TextUnit]::Line
+  if ($unit -eq 'word' -or $unit -eq 'phrase') { $textUnit = [System.Windows.Automation.TextUnit]::Word }
+  elseif ($unit -eq 'paragraph' -or $unit -eq 'document') { $textUnit = [System.Windows.Automation.TextUnit]::Paragraph }
+
+  $bag = New-Object System.Collections.Generic.List[object]
+  $seen = @{}
+
+  function Add-Hit([string]$text, [double]$hx, [double]$hy, [string]$src) {
+    $t = ([string]$text).Trim()
+    if (-not $t) { return }
+    if ($t.Length -gt 800) { $t = $t.Substring(0, 800) }
+    $key = ($t + '|' + [int][Math]::Round($hy / 6) + '|' + [int][Math]::Round($hx / 24))
+    if ($seen.ContainsKey($key)) { return }
+    $seen[$key] = $true
+    $null = $bag.Add(@{ text = $t; x = $hx; y = $hy; source = $src })
+  }
+
+  $cols = [Math]::Max(1, [Math]::Min(5, [int]([Math]::Ceiling($w / 80.0))))
+  $rows = [Math]::Max(1, [Math]::Min(10, [int]([Math]::Ceiling($h / 22.0))))
+  $stepX = $w / $cols
+  $stepY = $h / $rows
+
+  for ($r = 0; $r -lt $rows; $r++) {
+    for ($c = 0; $c -lt $cols; $c++) {
+      $px = $x + [Math]::Min($w - 2, 6 + $c * $stepX + $stepX / 2)
+      $py = $y + [Math]::Min($h - 2, 4 + $r * $stepY + $stepY / 2)
+      $pt = New-Object System.Windows.Point($px, $py)
+      $el = $null
+      try { $el = [System.Windows.Automation.AutomationElement]::FromPoint($pt) } catch { $el = $null }
+      if (-not $el) { continue }
+
+      $tp = Get-UiaTextPattern $el
+      if ($tp) {
+        try {
+          $range = $tp.RangeFromPoint($pt)
+          $range.ExpandToEnclosingUnit($textUnit)
+          if ($unit -eq 'phrase') {
+            [void]$range.MoveEndpointByUnit(
+              [System.Windows.Automation.TextPatternRangeEndpoint]::End,
+              [System.Windows.Automation.TextUnit]::Word,
+              4
+            )
+          }
+          $rects = @($range.GetBoundingRectangles())
+          $hit = $false
+          $hx = $px; $hy = $py
+          foreach ($rc in $rects) {
+            if (Test-RectIntersect $rc $sel) {
+              $hit = $true
+              $hx = $rc.X; $hy = $rc.Y
+              break
+            }
+          }
+          if ($hit) {
+            $txt = $range.GetText(400)
+            Add-Hit $txt $hx $hy 'uia-textpattern'
+            continue
+          }
+        } catch {}
+      }
+
+      try {
+        $br = $el.Current.BoundingRectangle
+        if (Test-RectIntersect $br $sel) {
+          $name = [string]$el.Current.Name
+          $ct = [string]$el.Current.LocalizedControlType
+          $looksDocument = $ct -match 'document|documentpane|edit'
+          if ($name -and $name.Length -gt 0 -and $name.Length -le 240 -and -not $looksDocument) {
+            Add-Hit $name $br.X $br.Y 'uia-name'
+          }
+        }
+      } catch {}
+    }
+  }
+
+  if ($bag.Count -eq 0) {
+    return @{ text = ''; source = 'uia-rect-empty'; meta = @{ samples = ($rows * $cols) } }
+  }
+
+  $ordered = $bag | Sort-Object { $_.y }, { $_.x }
+  $parts = New-Object System.Collections.Generic.List[string]
+  $lastY = [double]::NaN
+  foreach ($it in $ordered) {
+    if ($parts.Count -gt 0 -and -not [double]::IsNaN($lastY) -and ([Math]::Abs($it.y - $lastY) -ge 12)) {
+      $null = $parts.Add("`n")
+    } elseif ($parts.Count -gt 0) {
+      $null = $parts.Add(' ')
+    }
+    $null = $parts.Add($it.text)
+    $lastY = $it.y
+  }
+  $joined = (-join $parts).Trim()
+  $joined = [regex]::Replace($joined, '[ \t]+', ' ')
+  $joined = [regex]::Replace($joined, '(\r?\n){2,}', "`n")
+  if ($joined.Length -gt 4000) { $joined = $joined.Substring(0, 4000) }
+  return @{
+    text   = $joined
+    source = 'uia-rect'
+    meta   = @{ hits = $bag.Count; samples = ($rows * $cols); note = 'RangeFromPoint+intersect; Select not called' }
+  }
+}
+
 function Ensure-Ocr {
   if ($script:OcrReady) { return }
   try {
@@ -254,8 +393,38 @@ while ($true) {
       'keys'    { $data = Get-Keys }
       'quit'    { $data = @{ bye = $true } }
       'uia'     { $data = Get-UiaText $req.x $req.y ([string]$req.unit) }
+      'uia-rect'{
+        $unit = [string]$req.unit
+        $data = Get-UiaTextInRect $req.x $req.y $req.w $req.h $unit
+      }
       'ocr'     { $data = Invoke-Ocr ([string]$req.path) }
       'exstyle' { $data = Set-NoActivateStyle ([string]$req.hwnd) }
+      'guard-start' {
+        if (-not $script:GuardLoaded) { throw 'InputGuard not loaded' }
+        $mod = [string]$req.modifier
+        if (-not $mod) { $mod = 'alt' }
+        $xb = 0
+        try { $xb = [int]$req.extraButton } catch { $xb = 0 }
+        $dbg = $false
+        try { $dbg = [bool]$req.debug } catch { $dbg = $false }
+        [InputGuard]::Start($mod, $xb, $dbg)
+        $data = @{ started = $true; capturing = [InputGuard]::IsCapturing() }
+      }
+      'guard-stop' {
+        if ($script:GuardLoaded) { [InputGuard]::Stop() }
+        $data = @{ stopped = $true }
+      }
+      'guard-config' {
+        if (-not $script:GuardLoaded) { throw 'InputGuard not loaded' }
+        $mod = [string]$req.modifier
+        if (-not $mod) { $mod = 'alt' }
+        $xb = 0
+        try { $xb = [int]$req.extraButton } catch { $xb = 0 }
+        $dbg = $false
+        try { $dbg = [bool]$req.debug } catch { $dbg = $false }
+        [InputGuard]::Configure($mod, $xb, $dbg)
+        $data = @{ configured = $true }
+      }
       default   { throw "unknown cmd $cmd" }
     }
     Write-Json @{ id = $id; ok = $true; data = $data }

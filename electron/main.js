@@ -135,14 +135,15 @@ function createWindow() {
   // 应用信息
   ipcMain.handle('app:get-version', () => app.getVersion());
 
-  // ====== 悬停取词 / 截图翻译 / AI 配置同步 ======
+  // ====== 拖动取词 / 截图翻译 / AI 配置同步 ======
   // 渲染进程启动后同步配置到主进程
   ipcMain.handle('config:sync', (_, config) => {
     ai.updateConfig(config);
+    hoverTranslate.applyConfig();
     return true;
   });
 
-  // 悬停取词开关
+  // 全局拖动取词开关
   ipcMain.handle('hover:set-enabled', (_, enabled) => {
     if (enabled && ball.getEnabled()) hoverTranslate.start();
     else hoverTranslate.stop();
@@ -210,6 +211,7 @@ function createWindow() {
     shortcuts.setTranslateShortcutsEnabled(ballEnabled);
     hoverTranslate.setMasterEnabled(ballEnabled);
     if (!ballEnabled) hoverTranslate.stop();
+    else if (ai.getConfig().hoverEnabled) hoverTranslate.start();
   });
   ipcMain.handle('ball:get-state', () => ball.getEnabled());
   // 启动时若小球为关闭状态，立即注销翻译类快捷键

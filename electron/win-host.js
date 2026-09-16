@@ -13,6 +13,7 @@ let child = null;
 let starting = null;
 let reqId = 0;
 const pending = new Map();
+const eventListeners = new Set();
 let buf = '';
 let keysCache = { alt: false, ctrl: false, shift: false, lbutton: false, rbutton: false, escape: false };
 let prevKeys = { ...keysCache };
@@ -42,6 +43,12 @@ function handleLine(line) {
   }
   if (msg.ready) {
     log.info('[win-host] 就绪 pid=', msg.pid);
+    return;
+  }
+  if (msg.event) {
+    for (const fn of eventListeners) {
+      try { fn(msg); } catch (e) { log.warn('[win-host] event listener:', e.message); }
+    }
     return;
   }
   if (msg.id == null) return;
@@ -166,6 +173,50 @@ async function uiaText(physicalX, physicalY, unit = 'word') {
   return data || { text: '', source: 'uia-miss' };
 }
 
+async function uiaRect(physicalX, physicalY, physicalW, physicalH, unit = 'line') {
+  const data = await request('uia-rect', {
+    x: physicalX, y: physicalY, w: physicalW, h: physicalH, unit
+  }, 2800);
+  return data || { text: '', source: 'uia-rect-miss' };
+}
+
+function onEvent(fn) {
+  eventListeners.add(fn);
+  return () => eventListeners.delete(fn);
+}
+
+function modifierToGuard(mod) {
+  const m = String(mod || 'alt').toLowerCase();
+  if (m === 'ctrl') return { modifier: 'ctrl', extraButton: 0 };
+  if (m === 'shift') return { modifier: 'shift', extraButton: 0 };
+  if (m === 'alt+xbutton1' || m === 'alt-xbutton1') return { modifier: 'alt', extraButton: 1 };
+  if (m === 'alt+xbutton2' || m === 'alt-xbutton2') return { modifier: 'alt', extraButton: 2 };
+  return { modifier: 'alt', extraButton: 0 };
+}
+
+async function startGuard(opts = {}) {
+  const g = modifierToGuard(opts.modifier);
+  return await request('guard-start', {
+    modifier: g.modifier,
+    extraButton: g.extraButton,
+    debug: !!opts.debug
+  }, 2500);
+}
+
+async function stopGuard() {
+  try { return await request('guard-stop', {}, 1500); }
+  catch (_) { return null; }
+}
+
+async function configGuard(opts = {}) {
+  const g = modifierToGuard(opts.modifier);
+  return await request('guard-config', {
+    modifier: g.modifier,
+    extraButton: g.extraButton,
+    debug: !!opts.debug
+  }, 1200);
+}
+
 async function ocrFile(absPath) {
   return await request('ocr', { path: absPath }, 20000);
 }
@@ -186,10 +237,13 @@ async function applyNoActivate(win) {
 
 function stop() {
   if (keysTimer) { clearInterval(keysTimer); keysTimer = null; }
+  try { if (child) child.stdin.write(JSON.stringify({ id: ++reqId, cmd: 'guard-stop' }) + '\n'); } catch (_) {}
   try { if (child) child.stdin.write(JSON.stringify({ id: ++reqId, cmd: 'quit' }) + '\n'); } catch (_) {}
   setTimeout(killChild, 300);
 }
 
 module.exports = {
-  ensure, request, getKeys, keyWentDown, uiaText, ocrFile, applyNoActivate, stop, isRunning: () => !!child
+  ensure, request, getKeys, keyWentDown, uiaText, uiaRect, ocrFile,
+  startGuard, stopGuard, configGuard, onEvent,
+  applyNoActivate, stop, isRunning: () => !!child
 };
